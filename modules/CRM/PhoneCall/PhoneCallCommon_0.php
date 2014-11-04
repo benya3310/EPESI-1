@@ -300,7 +300,7 @@ class CRM_PhoneCallCommon extends ModuleCommon {
 			$values['subject'] = __('Follow-up').': '.$values['subject'];
 			$values['status'] = 0;
 			$ret = array();
-			if (ModuleManager::is_installed('CRM/Meeting')>=0) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Event')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('title'=>$values['subject'],'permission'=>$values['permission'],'priority'=>$values['priority'],'description'=>$values['description'],'date'=>date('Y-m-d'),'time'=>date('H:i:s'),'duration'=>3600,'employees'=>$values['employees'], 'customers'=>$values['customer'],'status'=>0), 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'" /></a>';
+			if (ModuleManager::is_installed('CRM/Meeting')>=0) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Meeting')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('title'=>$values['subject'],'permission'=>$values['permission'],'priority'=>$values['priority'],'description'=>$values['description'],'date'=>date('Y-m-d'),'time'=>date('H:i:s'),'duration'=>3600,'employees'=>$values['employees'], 'customers'=>$values['customer'],'status'=>0), 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'" /></a>';
 			if (ModuleManager::is_installed('CRM/Tasks')>=0) $ret['new']['task'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Task')).' '.Utils_RecordBrowserCommon::create_new_record_href('task', array('title'=>$values['subject'],'permission'=>$values['permission'],'priority'=>$values['priority'],'description'=>$values['description'],'employees'=>$values['employees'], 'customers'=>$values['customer'],'status'=>0,'deadline'=>date('Y-m-d', strtotime('+1 day')))).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Tasks','icon-small.png').'"></a>';
 			$ret['new']['phonecall'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Phonecall')).' '.Utils_RecordBrowserCommon::create_new_record_href('phonecall', $values, 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_PhoneCall','icon-small.png').'"></a>';
 			$ret['new']['note'] = Utils_RecordBrowser::$rb_obj->add_note_button('phonecall/'.$values['id']);
@@ -439,12 +439,13 @@ class CRM_PhoneCallCommon extends ModuleCommon {
 		$rb->view_entry('edit', $id);
 		return true;
 	}
-	public static function crm_new_event($timestamp, $timeless, $id, $cal_obj) {
+	public static function crm_new_event($timestamp, $timeless, $id, $object, $cal_obj) {
 		$x = ModuleManager::get_instance('/Base_Box|0');
 		if(!$x) trigger_error('There is no base box module instance',E_USER_ERROR);
 		$me = CRM_ContactsCommon::get_my_record();
 		$defaults = array('employees'=>$me['id'], 'priority'=>1, 'permission'=>0, 'status'=>0);
 		$defaults['date_and_time'] = date('Y-m-d H:i:s', $timestamp);
+		if($object) $defaults['employees'] = $object;
 		$x->push_main('Utils_RecordBrowser','view_entry',array('add', null, $defaults), 'phonecall');
 	}
 
@@ -548,7 +549,7 @@ class CRM_PhoneCallCommon extends ModuleCommon {
 			if (mb_strlen($e,'UTF-8')>33) $e = mb_substr($e , 0, 30, 'UTF-8').'...';
 			$emps[] = $e;
 		}
-		$next['busy_label'] = $emps;
+		$next['busy_label'] = $r['employees'];
 
 		$cuss = array();
 		$c = CRM_ContactsCommon::display_company_contact(array('customer'=>$r['customer']), true, array('id'=>'customer'));

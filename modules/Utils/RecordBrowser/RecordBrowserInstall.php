@@ -14,9 +14,12 @@ defined("_VALID_ACCESS") || die();
 
 class Utils_RecordBrowserInstall extends ModuleInstall {
 	public function install() {
+		$this->create_data_dir();
+		
 		Base_ThemeCommon::install_default_theme('Utils/RecordBrowser');
 		DB::CreateTable('recordbrowser_table_properties',
-						'tab C(64) KEY,'.
+						'id I2 AUTO KEY,'.
+						'tab C(64),'.
 						'quickjump C(64) DEFAULT \'\','.
 						'tpl C(255) DEFAULT \'\','.
 						'favorites I1 DEFAULT 0,'.
@@ -26,8 +29,11 @@ class Utils_RecordBrowserInstall extends ModuleInstall {
 						'icon C(255) DEFAULT \'\','.
 						'access_callback C(128) DEFAULT \'\','.
 						'description_callback C(128) DEFAULT \'\','.
-                        'jump_to_id I1 DEFAULT 1',
-						array('constraints'=>''));
+                        'jump_to_id I1 DEFAULT 1,'.
+                        'search_include I1 DEFAULT 0,'.
+                        'search_priority I1 DEFAULT 0,'.
+                        'printer C(255) DEFAULT \'\'',
+						array('constraints'=>', UNIQUE(tab)'));
 		DB::CreateTable('recordbrowser_datatype',
 						'type C(32) KEY,'.
 						'module C(64),'.
@@ -54,10 +60,9 @@ class Utils_RecordBrowserInstall extends ModuleInstall {
 
 		DB::CreateTable('recordbrowser_words_index', 'id I AUTO KEY,word C(3)',
 					array('constraints'=>', UNIQUE(word)'));
-		DB::CreateTable('recordbrowser_words_map', 'word_id I, tab C(64), record_id I, field_name C(32), position I',
-					array('constraints'=>', FOREIGN KEY (word_id) REFERENCES recordbrowser_words_index(id)'));
-		DB::CreateIndex('recordbrowser_words_map__idx','recordbrowser_words_map','word_id,tab,record_id,field_name');
-		DB::CreateIndex('recordbrowser_words_map__idx2','recordbrowser_words_map','tab,record_id');
+		DB::CreateTable('recordbrowser_words_map', 'word_id I, tab_id I2, record_id I, field_id I2, position I',
+					array('constraints'=>', FOREIGN KEY (word_id) REFERENCES recordbrowser_words_index(id) ON DELETE CASCADE ON UPDATE CASCADE, FOREIGN KEY (tab_id) REFERENCES recordbrowser_table_properties(id) ON DELETE CASCADE ON UPDATE CASCADE'));
+		DB::CreateIndex('recordbrowser_words_map__idx','recordbrowser_words_map','tab_id,record_id');
 		return true;
 	}
 	

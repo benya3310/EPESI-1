@@ -60,13 +60,16 @@ class Utils_MessengerCommon extends ModuleCommon {
 	public static function tray_notification() {
 		$arr = DB::GetAll('SELECT m.* FROM utils_messenger_message m INNER JOIN utils_messenger_users u ON u.message_id=m.id WHERE u.user_login_id=%d AND u.done=0 AND m.alert_on<%T',array(Acl::get_user(),time()));
 		$ret = array();
+		$tray = array();
 		foreach($arr as $row) {
 			ob_start();
 			$m = call_user_func_array(unserialize($row['callback_method']),unserialize($row['callback_args']));
 			ob_clean();
 			$ret['messenger_'.$row['id']] = __('Alert on: %s',array(Base_RegionalSettingsCommon::time2reg($row['alert_on'])))."<br>".str_replace("\n",'<br>',$m).($row['message']?"<br>".__('Alarm comment: %s',array($row['message'])):'');
+			
+			$tray['messenger_'.$row['id']] = array('title'=>__('Messenger - %s', array($row['message'])), 'body'=>$m);
 		}
-		return array('alerts'=>$ret);
+		return array('alerts'=>$ret, 'tray'=>$tray);
 	}
 	
 	public static function user_settings(){
@@ -93,9 +96,8 @@ class Utils_MessengerCommon extends ModuleCommon {
     }
 
     public static function cron2() {
-        $interval = DATABASE_DRIVER == 'postgres' ? DB::qstr('4 minute') : '4 minute';
+        $interval = DB::is_postgresql() ? DB::qstr('4 minute') : '4 minute';
 		$arr = DB::GetAll('SELECT m.*,u.* FROM utils_messenger_message m INNER JOIN utils_messenger_users u ON u.message_id=m.id WHERE u.follow=0 AND m.alert_on+INTERVAL ' . $interval . ' <%T',array(time()));
-		$ret = '';
 		foreach($arr as $row) {
 			Acl::set_user($row['user_login_id']);
 			$always_follow = Base_User_SettingsCommon::get('Utils_Messenger','always_follow_me');
@@ -109,12 +111,11 @@ class Utils_MessengerCommon extends ModuleCommon {
 			if($mail) {
 				$msg = __('Alert on: %s',array(Base_RegionalSettingsCommon::time2reg($row['alert_on'],2)))."\n".$fret."\n".($row['message']?__('Alarm comment: %s',array($row['message'])):'');
 				Base_MailCommon::send($mail,'Alert!',$msg);
-				$ret .= $mail.' => <pre>'.$msg.'</pre><br>';
 			}
 			Acl::set_user();
 		}
 		
-		return $ret;
+		return '';
 	}
 
     public static function menu() {

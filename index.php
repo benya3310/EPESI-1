@@ -75,7 +75,7 @@ class EpesiIndex
         require_once('include/config.php');
         require_once('include/maintenance_mode.php');
         require_once('include/error.php');
-        ob_start(array('ErrorHandler', 'handle_fatal'));
+        ob_start();
         require_once('include/database.php');
         require_once('include/variables.php');
         require_once('include/misc.php');

@@ -39,6 +39,7 @@ class BaseInstall extends ModuleInstall {
 		return array(
 		    array('name'=>'Base/Admin','version'=>0),
 		    array('name'=>'Base/ActionBar','version'=>0),
+		    array('name'=>'Base/Cron','version'=>0),
 		    array('name'=>'Base/Dashboard','version'=>0),
 		    array('name'=>'Base/Help','version'=>0),
 		    array('name'=>'Base/Setup','version'=>0),
@@ -50,6 +51,7 @@ class BaseInstall extends ModuleInstall {
 		    array('name'=>'Base/RegionalSettings','version'=>0),
 		    array('name'=>'Base/StatusBar','version'=>0),
 		    array('name'=>'Base/Search','version'=>0),
+            array('name'=>'Base/Print', 'version' => 0),
 		    array('name'=>'Base/HomePage','version'=>0),
 		    array('name'=>'Base/Theme/Administrator','version'=>0),
 		    array('name'=>'Base/User/Administrator','version'=>0));

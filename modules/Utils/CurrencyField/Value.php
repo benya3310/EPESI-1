@@ -47,7 +47,8 @@ class Utils_CurrencyField_Value
 
     public function to_string()
     {
-        return Utils_CurrencyFieldCommon::format_default($this->get_amount(), $this->get_currency_id());
+        $str = Utils_CurrencyFieldCommon::format_default($this->get_amount(), $this->get_currency_id());
+        return $str;
     }
 
     public function format()
@@ -70,6 +71,11 @@ class Utils_CurrencyField_Value
         $this->set_amount(self::add_amounts($this->get_amount(), $numeric_value));
     }
 
+    public function subtract_amount($numeric_value)
+    {
+        $this->set_amount(self::subtract_amounts($this->get_amount(), $numeric_value));
+    }
+
     public function subtract(Utils_CurrencyField_Value $other, $report_error = true)
     {
         if ($this->get_currency_id() == $other->get_currency_id()) {
@@ -88,6 +94,11 @@ class Utils_CurrencyField_Value
     public function get_currency_id()
     {
         return $this->currency_id;
+    }
+
+    public function get_currency_code()
+    {
+        return Utils_CurrencyFieldCommon::get_code($this->currency_id);
     }
 
     public function set_amount($amount)
@@ -125,6 +136,11 @@ class Utils_CurrencyField_Value
     protected static function add_amounts($am1, $am2)
     {
         return $am1 + $am2;
+    }
+
+    protected static function subtract_amounts($am1, $am2)
+    {
+        return $am1 - $am2;
     }
 
     private $amount;

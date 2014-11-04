@@ -13,6 +13,9 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class CRM_ContactsCommon extends ModuleCommon {
     public static $paste_or_new = 'new';
+	static $field = null;
+	static $rset = null;
+	static $rid = null;
 	
 	public static function help() {
 		return Base_HelpCommon::retrieve_help_from_file(self::Instance()->get_type());
@@ -27,7 +30,7 @@ class CRM_ContactsCommon extends ModuleCommon {
 		$clearance = array();
 		$all |= Base_AclCommon::i_am_sa();
 		$me = CRM_ContactsCommon::get_my_record(); 
-		$mc = CRM_ContactsCommon::get_main_company();
+		//$mc = CRM_ContactsCommon::get_main_company();
 		if ($all || $me['id']!=-1) {
 			$access_vals = Utils_CommonDataCommon::get_array('Contacts/Access', true);
 			if ($all) $access = array_keys($access_vals);
@@ -717,6 +720,54 @@ class CRM_ContactsCommon extends ModuleCommon {
             $form->setDefaults(array($field=>self::display_webaddress(array('webaddress'=>$default), null, array('id'=>'webaddress'))));
         }
     }
+    public static function QFfield_tax_id(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
+        if ($mode=='add' || $mode=='edit') {
+            $form->addElement('text', $field, $label, array('id'=>$field));
+            self::$rid = isset($rb_obj->record['id'])?$rb_obj->record['id']:null;
+            $form->addFormRule(array('CRM_ContactsCommon','check_tax_id_unique'));
+            if ($mode=='edit') $form->setDefaults(array($field=>$default));
+        } else {
+            $form->addElement('static', $field, $label);
+            $form->setDefaults(array($field=>$default));
+        }
+    }
+    public static function check_tax_id_unique($data) {
+        if(trim($data['tax_id'])) {
+            if(self::$rid)
+                $c = self::get_companies(array('tax_id'=>$data['tax_id'],'!id'=>self::$rid));
+            else
+                $c = self::get_companies(array('tax_id'=>$data['tax_id']));
+            if($c) {
+                $rec = array_shift($c);
+                return array('tax_id'=>__( 'Tax ID duplicate found: %s', array(Utils_RecordBrowserCommon::create_default_linked_label('company', $rec['id']))));
+            }
+        }
+        return array();
+    }
+    public static function QFfield_cname(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
+        if ($mode=='add' || $mode=='edit') {
+            $form->addElement('text', $field, $label, array('id'=>$field));
+            self::$rid = isset($rb_obj->record['id'])?$rb_obj->record['id']:null;
+            $form->addFormRule(array('CRM_ContactsCommon','check_cname_unique'));
+            if ($mode=='edit') $form->setDefaults(array($field=>$default));
+        } else {
+            $form->addElement('static', $field, $label);
+            $form->setDefaults(array($field=>$default));
+        }
+    }
+    public static function check_cname_unique($data) {
+        if(trim($data['company_name'])) {
+            if(self::$rid)
+                $c = self::get_companies(array('company_name'=>$data['company_name'],'!id'=>self::$rid));
+            else
+                $c = self::get_companies(array('company_name'=>$data['company_name']));
+            if($c) {
+                $rec = array_shift($c);
+                return array('company_name'=>__( 'Company name duplicate found: %s', array(Utils_RecordBrowserCommon::create_default_linked_label('company', $rec['id']))));
+            }
+        }
+        return array();
+    }
     public static function QFfield_email(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
         if ($mode=='add' || $mode=='edit') {
             $form->addElement('text', $field, $label, array('id'=>$field));
@@ -926,7 +977,7 @@ class CRM_ContactsCommon extends ModuleCommon {
 				$emp = array($me['id']);
 				$cus = array('C:'.$values['id']);
 				$ret = array();
-				if (ModuleManager::is_installed('CRM/Meeting')!==-1 && Utils_RecordBrowserCommon::get_access('crm_meeting','add')) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Event')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('employees'=>$emp,'customers'=>$cus,'status'=>0, 'priority'=>1, 'permission'=>0)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'"></a>';
+				if (ModuleManager::is_installed('CRM/Meeting')!==-1 && Utils_RecordBrowserCommon::get_access('crm_meeting','add')) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Meeting')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('employees'=>$emp,'customers'=>$cus,'status'=>0, 'priority'=>1, 'permission'=>0)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'"></a>';
 				if (ModuleManager::is_installed('CRM/Tasks')!==-1 && Utils_RecordBrowserCommon::get_access('task','add')) $ret['new']['task'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Task')).' '.Utils_RecordBrowserCommon::create_new_record_href('task', array('employees'=>$emp,'customers'=>$cus,'status'=>0, 'priority'=>1, 'permission'=>0)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Tasks','icon-small.png').'"></a>';
 				if (ModuleManager::is_installed('CRM/PhoneCall')!==-1 && Utils_RecordBrowserCommon::get_access('phonecall','add')) $ret['new']['phonecall'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Phonecall')).' '.Utils_RecordBrowserCommon::create_new_record_href('phonecall', array('date_and_time'=>date('Y-m-d H:i:s'),'customer'=>'C:'.$values['id'],'employees'=>$me['id'],'status'=>0, 'permission'=>0, 'priority'=>1),'none',array('date_and_time')).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_PhoneCall','icon-small.png').'"></a>';
 				$ret['new']['note'] = Utils_RecordBrowser::$rb_obj->add_note_button('company/'.$values['id']);
@@ -960,7 +1011,7 @@ class CRM_ContactsCommon extends ModuleCommon {
 			$ret['new']['crm_filter'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('Set CRM Filter')).' '.Module::create_href(array('set_crm_filter'=>1)).'>F</a>';
 			if (isset($_REQUEST['set_crm_filter']))
 				CRM_FiltersCommon::set_profile('c'.$values['id']);
-			if (ModuleManager::is_installed('CRM/Meeting')!==-1 && Utils_RecordBrowserCommon::get_access('crm_meeting','add')) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Event')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('employees'=>$emp,'customers'=>$cus,'status'=>0, 'priority'=>1, 'permission'=>0)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'"></a>';
+			if (ModuleManager::is_installed('CRM/Meeting')!==-1 && Utils_RecordBrowserCommon::get_access('crm_meeting','add')) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Meeting')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('employees'=>$emp,'customers'=>$cus,'status'=>0, 'priority'=>1, 'permission'=>0)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'"></a>';
 			if (ModuleManager::is_installed('CRM/Tasks')!==-1 && Utils_RecordBrowserCommon::get_access('task','add')) $ret['new']['task'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Task')).' '.Utils_RecordBrowserCommon::create_new_record_href('task', array('employees'=>$emp,'customers'=>$cus,'status'=>0, 'priority'=>1, 'permission'=>0)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Tasks','icon-small.png').'"></a>';
 			if (ModuleManager::is_installed('CRM/PhoneCall')!==-1 && Utils_RecordBrowserCommon::get_access('phonecall','add')) $ret['new']['phonecall'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Phonecall')).' '.Utils_RecordBrowserCommon::create_new_record_href('phonecall', array('date_and_time'=>date('Y-m-d H:i:s'),'customer'=>'P:'.$values['id'],'employees'=>$me['id'],'status'=>0, 'permission'=>0, 'priority'=>1),'none',false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_PhoneCall','icon-small.png').'"></a>';
 			$ret['new']['note'] = Utils_RecordBrowser::$rb_obj->add_note_button('contact/'.$values['id']);
@@ -1226,9 +1277,6 @@ class CRM_ContactsCommon extends ModuleCommon {
         return $ret;
     }
 	
-	static $field = null;
-	static $rset = null;
-	static $rid = null;
 	public static function add_rule_email_unique($form, $field, $rset=null, $rid=null) {
 		self::$field = $field;
 		self::$rset = $rset;
@@ -1254,9 +1302,14 @@ class CRM_ContactsCommon extends ModuleCommon {
 			$vals = array($email);
 			$where_id = '';
 			if ($rid!=null) {
-				$vals[] = $rset;
-				$vals[] = $rid;
-				$where_id = ' AND (f_record_type!=%s OR f_record_id!=%d)';
+                if ($rset == 'rc_multiple_emails') {
+                    $vals[] = $rid;
+                    $where_id = ' AND id!=%d';
+                } else {
+                    $vals[] = $rset;
+                    $vals[] = $rid;
+                    $where_id = ' AND (f_record_type!=%s OR f_record_id!=%d)';
+                }
 			}
 			$tmp = DB::GetRow('SELECT id, f_record_id, f_record_type FROM rc_multiple_emails_data_1 WHERE active=1 AND f_email '.DB::like().' %s'.$where_id.' ORDER BY f_record_type DESC', $vals);
 			if ($tmp)

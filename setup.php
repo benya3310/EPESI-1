@@ -9,7 +9,7 @@
 if (version_compare(phpversion(), '5.4.0')==-1)
 	error_reporting(E_ALL); //all without notices
 else
-	error_reporting(E_ALL & ~E_STRICT);
+	error_reporting(E_ALL & ~E_STRICT & ~E_DEPRECATED);
 ob_start();
 ini_set('arg_separator.output','&');
 @define('SYSTEM_TIMEZONE',date_default_timezone_get());
@@ -387,9 +387,11 @@ function write_config($host, $user, $pass, $dbname, $engine, $other) {
 	$local_dir = dirname(dirname(str_replace('\\','/',__FILE__)));
 	$script_filename = str_replace('\\','/',$_SERVER['SCRIPT_FILENAME']);
 	$other_conf = '';
-	if(strcmp($local_dir,substr($script_filename,0,strlen($local_dir))))
-		$other_conf .= "\n".'@define("EPESI_DIR","'.str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])).'");';
-	$other_conf .= "\n".'define("DIRECTION_RTL","'.($other['direction']?'1':'0').'");';
+	if(strcmp($local_dir,substr($script_filename,0,strlen($local_dir)))) {
+        $epesi_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+        $other_conf .= "\n".'@define(\'EPESI_DIR\',\''. addcslashes($epesi_dir, '\'\\') .'\');';
+    }
+	$other_conf .= "\n".'define(\'DIRECTION_RTL\',\''.($other['direction']?'1':'0').'\');';
 
 	$protocol = (isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS'])!== "off") ? 'https://' : 'http://';
         $domain_name = '';
@@ -398,10 +400,11 @@ function write_config($host, $user, $pass, $dbname, $engine, $other) {
         } else if (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME']) {
             $domain_name = $_SERVER['SERVER_NAME'];
         }
-        if($domain_name) {
-            $url = $protocol . $domain_name . dirname($_SERVER['REQUEST_URI']);
-	    $other_conf .= "\n".'define("EPESI_URL","'.$url.'");';
-        }
+    if ($domain_name) {
+        $url = $protocol . $domain_name . dirname($_SERVER['REQUEST_URI']);
+        $url = str_replace('\\', '/', $url);
+        $other_conf .= "\n" . 'define(\'EPESI_URL\',\'' . addcslashes($url, '\'\\') . '\');';
+    }
 	$c = & fopen(DATA_DIR.'/config.php', 'w');
 	fwrite($c, '<?php
 /**
@@ -545,9 +548,9 @@ function clean_database() {
 	require_once('include/database.php');
 	$tables_db = DB::MetaTables();
 	$tables = array();
-	if(DATABASE_DRIVER=='mysqlt' || DATABASE_DRIVER=='mysqli')
+	if(DB::is_mysql())
 		DB::Execute('SET FOREIGN_KEY_CHECKS=0');
-	if(DATABASE_DRIVER=='postgres' && strpos(DB::GetOne('SELECT version()'),'PostgreSQL 8.2')!==false) {
+	if(DB::is_postgresql() && strpos(DB::GetOne('SELECT version()'),'PostgreSQL 8.2')!==false) {
     	    foreach ($tables_db as $t) {
 	            $idxs = DB::Execute('SELECT t.tgargs as args FROM pg_trigger t,pg_class c,pg_proc p WHERE t.tgenabled AND t.tgrelid = c.oid AND t.tgfoid = p.oid AND p.proname = \'RI_FKey_check_ins\' AND c.relname = \''.strtolower($t).'\' ORDER BY t.tgrelid');
 		    $matches = array(1=>array());
@@ -563,13 +566,15 @@ function clean_database() {
 	foreach($tables_db as $t) {
 		DB::DropTable($t);
 	}
-	if(DATABASE_DRIVER=='mysqlt' || DATABASE_DRIVER=='mysqli')
+	if(DB::is_mysql())
 		DB::Execute('SET FOREIGN_KEY_CHECKS=1');
 }
 
 function install_base() {
 	require_once('include/config.php');
 	require_once('include/database.php');
+	
+	@DB::Execute('ALTER DATABASE '.DATABASE_NAME.' CHARACTER SET utf8 COLLATE utf8_general_ci');
 
 	$ret = DB::CreateTable('modules',"name C(128) KEY,version I NOTNULL, priority I NOTNULL DEFAULT 0");
 	if($ret===false)

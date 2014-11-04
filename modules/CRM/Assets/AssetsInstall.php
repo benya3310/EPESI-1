@@ -178,14 +178,18 @@ class CRM_AssetsInstall extends ModuleInstall {
         Utils_RecordBrowserCommon::enable_watchdog('crm_assets', array('CRM_AssetsCommon','watchdog_label'));
 
 		Utils_RecordBrowserCommon::add_default_access('crm_assets');
+        Utils_RecordBrowserCommon::set_search('crm_assets',2,0);
 
         Utils_RecordBrowserCommon::new_addon('company', 'CRM/Assets', 'assets_addon', _M('Assets'));
 		Utils_AttachmentCommon::new_addon('crm_assets');
+
+        Base_ThemeCommon::install_default_theme($this->get_type());
 
         return true;
     }
 
     public function uninstall() {
+        Base_ThemeCommon::uninstall_default_theme($this->get_type());
         Utils_CommonDataCommon::remove('crm_assets_category');
         Utils_CommonDataCommon::remove('crm_assets_monitor_type');
         Utils_CommonDataCommon::remove('crm_assets_printer_type');

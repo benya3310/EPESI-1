@@ -1,6 +1,92 @@
 EPESI CHANGELOG
 ===============
 
+(Dev) means that this change is significant only for developers.
+
+CURRENT
+-------
+
+- Base/Print add method to obtain all templates (Dev)
+- Fix recordset uninstall issue caused by words map table constraint 
+
+RELEASE 1.6.2-20141020
+-------
+
+- Fix like operator on date fields - used by birthdays applet
+
+RELEASE 1.6.2-20141017
+-------
+
+- Fix user activity report issues
+- Update AdoDB to 5.19
+- Fix Roundcube cache issue
+- Decrypt note in view - allows to enter crypted note from search
+- Fix autoselect filter issue
+- Fix tax_id label
+- Search file downloads just by token
+- Index records for search without cron
+- Fix RB select field edit issues
+- Fix some RB field edit issues
+- Fix handling of relative date crits
+- Add new processing callback: browse (Dev)
+- Fix time intervals in meetings
+- ESS - test connection before registration
+- Functions to check database type (Dev)
+- Extract SimpleLogin class from admin tools for easy login (Dev)
+- Fix setup script for PHP >= 5.6
+- Fix blank index page issue
+- Fix bad character at the bottom of the page
+- Make display_as_row to wrap fields
+- Improve module install failure message
+- Add method to remove access rules by definition to RecordBrowser (Dev)
+- Keep form field focus on soft refresh
+- Include Utils/Tray module (Dev)
+- Reopen leightbox when error occured in a form
+- Add function to replace Base_Box main (Dev)
+- Admin tools - add Update Manager to download updates
+- Fix translation module to not grow custom translations files
+- Update translations
+
+RELEASE 1.6.1-20140913
+-------
+
+- Fix dashboard applets removal
+- Add field to select from multiple recordsets in RecordBrowser
+- Fix attachments PHP 5.3 code issue
+- Fix RoundCube addressbook contacts search
+- Set Contacts/Access Manager as read-only
+- Fix translation functions in Attachments
+- Allow negative integer numbers in RecordBrowser
+- Set "Company Name" and "Tax ID" fields as unique
+- Fix mobile RB edit bug
+- Fix Base/Theme get_icon function
+- Add Cron Management to Administrator Panel
+- Add Custom Recordsets tool to RecordBrowser
+- Fix cron CLI detection
+- Add who made last edit in attachments display
+- Fix Email applet issue with password encoding
+- Fix unique email rule
+- Add time and timestamp fields to RB GUI admin
+- Add datepicker placeholder text
+- Fix phonecalls template
+- Add ability to sort RB fields with drag n drop
+- Update ckeditor version to the most recent
+- Add button to switch full toolbar in ckeditor
+- Improve patches util error reporting in admin tools
+- Maintain QFfields callbacks order during position change
+- Configurable edited_on field format in Attachments
+- Allow to disable expandable rows in user settings
+- Search improvements - optimization, set defaults, disable certain recordsets
+- Attachments - do not show password in decrypt form
+- RecordBrowser - save filters per user
+- RecordBrowser - do not show filter for blocked field
+- RecordBrowser - add ability to print any record
+- Improve Translation panel
+- Fix watchdog notification for notes
+- Update translations
+- Fix bbcodes in attachments
+- RecordBrowser - allow multiple additional actions methods
+
 RELEASE 1.6.0-20140710
 -------
 
