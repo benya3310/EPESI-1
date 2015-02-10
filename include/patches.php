@@ -387,7 +387,9 @@ class Patch
         $p1_date = $patch1->get_creation_date();
         $p2_date = $patch2->get_creation_date();
         if ((!$p1_date && !$p2_date) || $p1_date == $p2_date) {
-            return strcmp($patch1->file, $patch2->file);
+            $ret = strcmp(basename($patch1->file), basename($patch2->file));
+            if ($ret === 0) $ret = strcmp($patch1->file, $patch2->file);
+            return $ret;
         }
         if (!$p1_date) {
             return -1;
@@ -425,7 +427,7 @@ class Patch
         //  2. All function calls before Patch::apply
         $delete = false;
         foreach ($debug_backtrace as $k => $v) {
-            if ($v['file'] == __FILE__ && $v['function'] == 'apply') {
+            if (isset($v['file']) && $v['file'] == __FILE__ && $v['function'] == 'apply') {
                 $delete = true;
             }
             if ($delete) {

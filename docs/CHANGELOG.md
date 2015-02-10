@@ -6,8 +6,78 @@ EPESI CHANGELOG
 CURRENT
 -------
 
+- Change cookie expiration time to 7 days for maintenance mode
+- Improve update process - make sure maintenance mode is on during patches
+- Set default customer for phonecalls, tasks and meetings
+- Fix toolbar mode switch in ckeditor
+- Add global cache stored in the file (Dev)
+- Update ckeditor to the latest version
+- Replace CustomRoundcubeAddons with built-in related mechanism
+- Fix Roundcube archive copy/paste
+- Add option to export RB report to csv file
+- Fix issues in currencies admin panel for PostgreSQL database
+- Register custom Prototype events also in jQuery (Dev)
+- Add selection rules to RecordBrowser
+- Currency field - fix frozen value display
+- Add option to disable module without uninstall
+- Improve /admin script to manage disabled modules
+- Base/Print - add more document config params to PDF
+- Base/Print - pass printer classname to document_config method (Dev)
+- Fix GenericBrowser's default template when expandable is disabled
+- Changes in expandable calculation to wrap long text fields - GenericBrowser
+- Fix admin access param to get_records method - RecordBrowser
+
+RELEASE 1.6.3-20150107
+-------
+
 - Base/Print add method to obtain all templates (Dev)
 - Fix recordset uninstall issue caused by words map table constraint 
+- Add desktop notifications for Shoutbox, Watchdog and Messenger modules (georgehristov)
+- Add desktop notifications possibility (Dev) (georgehristov)
+- Login audit - obtain real IP for proxy connections
+- Improve module dependencies issue reporting
+- Add method Utils_CurrencyFieldCommon::get_all_currencies (Dev)
+- Add printer document config (Dev)
+- Rename recordset_printer RB patch to fix updates from older EPESI versions
+- Whitelabel fixes - replace EPESI text with constant
+- Include autonumber fields in default description callback
+- Fix duplicate tooltip on field's label - RecordBrowser
+- Fix popup calendar event
+- Fix locking issues with RB indexer
+- Make fields management as a first tab in RecordBrowser's admin
+- Sort patches by name (not by path), when no date is supplied in the filename
+- Rewrite to JQuery: Utils/Watchdog, Utils/Tooltip (georgehristov)
+- Base/Print - change PrintingHandler::output_document to public (Dev)
+- Fix fields editor in RecordBrowser - issues with select/multiselect
+- Fix display_phone to not create links when nolink is true
+- Fix translations in Access Restrictions admin panel
+- Fix fields processing order for new fields with *position* set
+- Fix date/time crits issues
+- Rewrite Session class
+- Fix issues with crm_company_contact field edit
+- Fix records indexing - create labels with *nolink* param
+- Fix Base/Print - buffer PDF output to append footers just once
+- Change icon for drag and drop fields sorting
+- Add default currency concept
+- Add new processing modes to RecordBrowser: edited, deleted, restored
+- Fix access issues for autocomplete fields
+- Fix desktop notifications to not show shoutbox notifications every time
+- Create link to record for autonumber fields
+- Add option to jump to new record or not in RB object (Dev)
+- Fix indexing when autonumber field has changed
+- Fix fields position numbers when removing field
+- Keep autonumber position during field edit
+- Add method to clear search index for certain tab (Dev)
+- Add button to clear search index in RB admin
+- Update RoundCube to 1.0.3
+- Add related records concept to meetings, tasks and phone calls
+- Change table width in RecordBrowser Reports printout
+- Fix undefined index issue in RB Reports
+- Fix update script to detect glob errors
+- Fix admin access - check for method with method exists instead of is callbable
+- Fix turkish language issues
+- Fix year bug in QuickForm
+- Allow to set custom caption for every field in RB
 
 RELEASE 1.6.2-20141020
 -------

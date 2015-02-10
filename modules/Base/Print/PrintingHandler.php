@@ -24,7 +24,7 @@ class Base_Print_PrintingHandler
      * Generate document and output to the stdout with specific to Document
      * http headers.
      */
-    protected function output_document()
+    public function output_document()
     {
         $document = $this->printed_document();
         $content = $document->get_output();
@@ -40,7 +40,7 @@ class Base_Print_PrintingHandler
     public function printed_document()
     {
         $printer = $this->get_printer();
-        $printer->set_document(new Base_Print_Document_PDF());
+        $printer->set_document(new Base_Print_Document_PDF($printer->get_document_config('Base_Print_Document_PDF')));
         $this->set_selected_template();
 
         return $printer->get_printed_document($this->get_data());

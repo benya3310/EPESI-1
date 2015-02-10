@@ -73,7 +73,7 @@ class EpesiUpdatePackage
         }
 
         $possible_files = glob('epesi-*.ei.zip');
-        if (count($possible_files)) {
+        if (is_array($possible_files) && count($possible_files)) {
             rsort($possible_files);
             return new self($possible_files[0]);
         }
@@ -101,6 +101,15 @@ class EpesiUpdate
     protected function load_epesi()
     {
         $this->CLI = (php_sapi_name() == 'cli');
+        if ($this->CLI) {
+            // allow to define DATA directory for CLI in argument
+            if(isset($argv)) {
+                define('EPESI_DIR','/');
+                if (isset($argv[1])) {
+                    define('DATA_DIR', $argv[1]);
+                }
+            }
+        }
 
         define('CID', false);
         require_once('include.php');
@@ -135,7 +144,12 @@ class EpesiUpdate
     public function version_up_to_date()
     {
         $msg = __('Your EPESI does not require update');
-        $this->quit($msg);
+        if ($this->CLI) {
+            print ($msg . "\n");
+            print (__('Update procedure forced') . "\n");
+        } else {
+            $this->quit($msg);
+        }
     }
 
     protected function require_admin_login()
@@ -269,8 +283,14 @@ class EpesiUpdate
 
     protected function turn_on_maintenance_mode()
     {
+        if (MaintenanceMode::is_on()) return;
+
         $msg = __('EPESI is currently updating. Please wait or contact your system administrator.');
-        MaintenanceMode::turn_on_with_cookie($msg);
+        if ($this->CLI) {
+            MaintenanceMode::turn_on($msg);
+        } else {
+            MaintenanceMode::turn_on_with_cookie($msg);
+        }
     }
 
     protected function perform_update_start()
@@ -290,6 +310,8 @@ class EpesiUpdate
 
     protected function perform_update_patches($browser = true)
     {
+        $this->turn_on_maintenance_mode();
+
         $patches = PatchUtil::apply_new(true);
 
         if ($browser) {
@@ -334,6 +356,8 @@ class EpesiUpdate
 
     protected function perform_update_end()
     {
+        $this->turn_on_maintenance_mode();
+
         Base_ThemeCommon::themeup();
         Base_LangCommon::update_translations();
         ModuleManager::create_load_priority_array();
@@ -390,13 +414,6 @@ class EpesiUpdate
     protected $CLI;
     protected $system_version;
     protected $current_version;
-}
-
-if(isset($argv)) {
-    define('EPESI_DIR','/');
-    if (isset($argv[1])) {
-        define('DATA_DIR', $argv[1]);
-    }
 }
 
 $x = new EpesiUpdate();

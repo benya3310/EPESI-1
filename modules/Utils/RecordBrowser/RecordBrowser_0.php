@@ -42,6 +42,7 @@ class Utils_RecordBrowser extends Module {
 	private $search_calculated_callback = false;
 	private $fields_in_tabs = array();
 	private $hide_tab = array();
+    private $jump_to_new_record = false;
     public $action = 'Browsing'; // _M('Browsing');
     public $custom_defaults = array();
     public static $tab_param = '';
@@ -113,6 +114,10 @@ class Utils_RecordBrowser extends Module {
 
     public function set_additional_caption($arg) {
         $this->additional_caption = $arg;
+    }
+
+    public function set_jump_to_new_record($arg = true) {
+        $this->jump_to_new_record = $arg;
     }
 
     public function get_display_method($ar) {
@@ -228,12 +233,7 @@ class Utils_RecordBrowser extends Module {
         if ($this->check_for_jump()) return;
         $this->fullscreen_table=true;
         $this->init();
-        if (self::$clone_result!==null) {
-            if (is_numeric(self::$clone_result)) $this->navigate('view_entry', 'view', self::$clone_result);
-            $clone_result = self::$clone_result;
-            self::$clone_result = null;
-            if ($clone_result!='canceled') return;
-        }
+        $this->jump_to_new_record = true;
         if ($this->get_access('browse')===false) {
             print(__('You are not authorised to browse this data.'));
             return;
@@ -370,15 +370,25 @@ class Utils_RecordBrowser extends Module {
 				$filters[] = $filter_id.'__from';
 				$filters[] = $filter_id.'__to';
 				continue;
-            }
-			if ($this->table_rows[$filter]['type']=='checkbox') {
+            } elseif ($this->table_rows[$filter]['type']=='checkbox') {
                 $arr = array(''=>__('No'), 1=>__('Yes'));
-            } else {
-                if ($this->table_rows[$filter]['type'] == 'currency') {
-                    $arr = Utils_CurrencyFieldCommon::get_currencies();
-                    if (count($arr) <= 1)
-                        continue;
-                } else if ($this->table_rows[$filter]['type'] == 'commondata') {
+            } elseif (in_array($this->table_rows[$filter]['type'], array('currency','float','integer','autonumber')) || ($this->table_rows[$filter]['type'] == 'calculated' && $this->table_rows[$filter]['param'] != '' && in_array($this->table_rows[$filter]['style'], array('currency','float','integer','autonumber')))) {
+		    $form->addElement('text', $field_id.'__from', _V($filter).' ('.__('From').')', array('label'=>false)); // TRSL
+		    $form->addElement('text', $field_id.'__to', _V($filter).' ('.__('To').')', array('label'=>false)); // TRSL
+		    $form->addRule($field_id.'__from',__('Only numbers are allowed.'),'numeric');
+		    $form->addRule($field_id.'__to',__('Only numbers are allowed.'),'numeric');
+		    $filters[] = $filter_id.'__from';
+		    $filters[] = $filter_id.'__to';
+		    if ($this->table_rows[$filter]['type'] == 'currency' || ($this->table_rows[$filter]['type'] == 'calculated' && $this->table_rows[$filter]['param'] != '' && $this->table_rows[$filter]['style'] == 'currency')) {
+                        $arr = Utils_CurrencyFieldCommon::get_currencies();
+                        if (count($arr) > 1) {
+                            $arr = array('__NULL__'=>'---')+$arr;
+                            $form->addElement('select', $field_id.'__currency', _V($filter).' ('.__('Currency').')', $arr); // TRSL
+                            $filters[] = $filter_id.'__currency';
+                        }
+                    }
+                    continue;
+            } else if ($this->table_rows[$filter]['type'] == 'commondata') {
 					$parts = explode('::', $this->table_rows[$filter]['param']['array_id']);
 					$array_id = array_shift($parts);
 					$arr = Utils_CommonDataCommon::get_translated_array($array_id, $this->table_rows[$filter]['param']['order_by_key']);
@@ -393,7 +403,7 @@ class Utils_RecordBrowser extends Module {
 						$arr = $next_arr;
 					}
                     natcasesort($arr);
-                } else {
+            } else {
                     $param = explode(';',$this->table_rows[$filter]['param']);
                     $x = explode('::',$param[0]);
                     if (!isset($x[1])) continue;
@@ -453,8 +463,8 @@ class Utils_RecordBrowser extends Module {
                         }
                         if ($tab=='contact') $arr = array($this->crm_perspective_default()=>'['.__('Perspective').']')+$arr;
                     } 
-                }
             }
+            
             
             if($autoselect) {
                 $f_callback = array('Utils_RecordBrowserCommon', 'autoselect_label');
@@ -522,10 +532,13 @@ class Utils_RecordBrowser extends Module {
                     $this->crits = Utils_RecordBrowserCommon::merge_crits($this->crits, $new_crits);
                 }
             } else {
-                if ($this->table_rows[$filter]['type'] == 'currency') {
-                    if (isset($vals[$field_id]) && $vals[$field_id] != "__NULL__") {
-                        $this->crits["~$filter"] = "%__" . $vals[$field_id];
-                    }
+                if (in_array($this->table_rows[$filter]['type'], array('currency','float','integer','autonumber')) || ($this->table_rows[$filter]['type'] == 'calculated' && $this->table_rows[$filter]['param'] != '' && in_array($this->table_rows[$filter]['style'], array('currency','float','integer','autonumber')))) {
+                    if (isset($vals[$field_id.'__currency']) && $vals[$field_id.'__currency'] != "__NULL__")
+                        $this->crits["~$filter"] = "%__" . $vals[$field_id.'__currency'];
+                    if (isset($vals[$field_id.'__from']) && $vals[$field_id.'__from'] !== "")
+                        $this->crits[">=\"$filter"] = floatval($vals[$field_id.'__from']);
+                    if (isset($vals[$field_id.'__to']) && $vals[$field_id.'__to'] !== "")
+                        $this->crits["<=\"$filter"] = floatval($vals[$field_id.'__to']);
                     continue;
                 }
 				if ($this->table_rows[$filter]['type']=='timestamp' || $this->table_rows[$filter]['type']=='date') {
@@ -619,6 +632,12 @@ class Utils_RecordBrowser extends Module {
 		$this->help('RecordBrowser','main');
 		if (Utils_RecordBrowserCommon::$admin_access) $admin = true;
         if (isset($_SESSION['client']['recordbrowser']['admin_access'])) Utils_RecordBrowserCommon::$admin_access = true;
+        if (self::$clone_result!==null && $this->jump_to_new_record) {
+            if (is_numeric(self::$clone_result)) $this->navigate('view_entry', 'view', self::$clone_result);
+            $clone_result = self::$clone_result;
+            self::$clone_result = null;
+            if ($clone_result!='canceled') return;
+        }
         if ($this->check_for_jump()) return;
         Utils_RecordBrowserCommon::$cols_order = $this->col_order;
         if ($this->get_access('browse')===false) {
@@ -1635,17 +1654,17 @@ class Utils_RecordBrowser extends Module {
 		
 		$tabs = array(
 		array(
-			'access'=>'records',
-			'func'=>array($this, 'show_data'),
-			'label'=>__('Manage Records'),
-			'args'=>array(array(), array(), array(), Base_AdminCommon::get_access('Utils_RecordBrowser', 'records')==2)
-		),
-		array(
 			'access'=>'fields',
 			'func'=>array($this, 'setup_loader'),
 			'label'=>__('Manage Fields'),
 			'args'=>array()
 		),
+        array(
+            'access'=>'records',
+            'func'=>array($this, 'show_data'),
+            'label'=>__('Manage Records'),
+            'args'=>array(array(), array(), array(), Base_AdminCommon::get_access('Utils_RecordBrowser', 'records')==2)
+        ),
 		array(
 			'access'=>'addons',
 			'func'=>array($this, 'manage_addons'),
@@ -1715,9 +1734,21 @@ class Utils_RecordBrowser extends Module {
 	}
         if($r) $form->setDefaults($r);
         $form->display_as_column();
-        if ($full_access && $form->validate()) {
-            DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,favorites=%b,recent=%b,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
-                array($form->exportValue('caption'),$form->exportValue('favorites'),$form->exportValue('recent'),$form->exportValue('full_history'),$form->exportValue('jump_to_id'),$form->exportValue('search_include'),$form->exportValue('search_priority'),$this->tab));
+        if ($full_access) {
+            $clean_index_href = $this->create_confirm_callback_href(__('Are you sure?'), array($this, 'clean_search_index'), array($this->tab));
+            echo "<a $clean_index_href>" . __('Clean search index') . "</a>";
+            if ($form->validate()) {
+                DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,favorites=%b,recent=%b,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
+                            array($form->exportValue('caption'), $form->exportValue('favorites'), $form->exportValue('recent'), $form->exportValue('full_history'), $form->exportValue('jump_to_id'), $form->exportValue('search_include'), $form->exportValue('search_priority'), $this->tab));
+            }
+        }
+    }
+
+    public function clean_search_index($tab)
+    {
+        $ret = Utils_RecordBrowserCommon::clean_search_index($tab);
+        if ($ret) {
+            Base_StatusBarCommon::message(__('Index cleaned for this table. Indexing again - it may take some time.'));
         }
     }
 
@@ -1748,18 +1779,21 @@ class Utils_RecordBrowser extends Module {
     public function new_page() {
         DB::StartTrans();
         $max_f = DB::GetOne('SELECT MAX(position) FROM '.$this->tab.'_field');
+        $max_p = DB::GetOne('SELECT MAX(processing_order) FROM '.$this->tab.'_field');
         $num = 1;
         do {
             $num++;
             $x = DB::GetOne('SELECT position FROM '.$this->tab.'_field WHERE type = \'page_split\' AND field = %s', array('Details '.$num));
         } while ($x!==false && $x!==null);
-        DB::Execute('INSERT INTO '.$this->tab.'_field (field, type, extra, position) VALUES(%s, \'page_split\', 1, %d)', array('Details '.$num, $max_f+1));
+        DB::Execute('INSERT INTO '.$this->tab.'_field (field, type, extra, position, processing_order) VALUES(%s, \'page_split\', 1, %d, %d)', array('Details '.$num, $max_f+1, $max_p+1));
         DB::CompleteTrans();
     }
     public function delete_page($id) {
         DB::StartTrans();
         $p = DB::GetOne('SELECT position FROM '.$this->tab.'_field WHERE field=%s', array($id));
+        $po = DB::GetOne('SELECT processing_order FROM '.$this->tab.'_field WHERE field=%s', array($id));
         DB::Execute('UPDATE '.$this->tab.'_field SET position = position-1 WHERE position > %d', array($p));
+        DB::Execute('UPDATE '.$this->tab.'_field SET processing_order = processing_order-1 WHERE processing_order > %d', array($po));
         DB::Execute('DELETE FROM '.$this->tab.'_field WHERE field=%s', array($id));
         DB::CompleteTrans();
     }
@@ -1776,7 +1810,7 @@ class Utils_RecordBrowser extends Module {
         $form->registerRule('check_if_no_id', 'callback', 'check_if_no_id', $this);
         $form->addRule('label', __('Field required'), 'required');
         $form->addRule('label', __('Field or Page with this name already exists.'), 'check_if_column_exists');
-        $form->addRule('label', __('Only letters and space are allowed.'), 'regex', '/^[a-zA-Z ]*$/');
+        $form->addRule('label', __('Only letters, numbers and space are allowed.'), 'regex', '/^[a-zA-Z ]*$/');
         $form->addRule('label', __('"ID" as page name is not allowed.'), 'check_if_no_id');
         $form->setDefaults(array('label'=>$id));
 
@@ -1842,6 +1876,7 @@ class Utils_RecordBrowser extends Module {
         $gb = $this->init_module('Utils/GenericBrowser', null, 'fields');
         $gb->set_table_columns(array(
             array('name'=>__('Field'), 'width'=>20),
+            array('name'=>__('Caption'), 'width'=>20),
             array('name'=>__('Type'), 'width'=>10),
             array('name'=>__('Table view'), 'width'=>5),
             array('name'=>__('Required'), 'width'=>5),
@@ -1871,7 +1906,7 @@ class Utils_RecordBrowser extends Module {
 					else $gb_row->add_action($this->create_callback_href(array($this, 'set_field_active'),array($field, true)),'Activate', null, 'active-off');
 				}
                 if ($field != 'General') {
-                    $gb_row->add_action('class="move-handle"','Move', __('Drag to change field position'), 'move-down');
+                    $gb_row->add_action('class="move-handle"','Move', __('Drag to change field position'), 'move-up-down');
                     $gb_row->set_attrs("field_name=\"$field\" class=\"sortable\"");
                 }
 			}
@@ -1933,6 +1968,7 @@ class Utils_RecordBrowser extends Module {
             if ($args['type'] == 'page_split')
                     $gb_row->add_data(
                         array('style'=>'background-color: #DFDFFF;', 'value'=>$field),
+                        array('style'=>'background-color: #DFDFFF;', 'value'=>$args['name']),
                         array('style'=>'background-color: #DFDFFF;', 'value'=>__('Page Split')),
                         array('style'=>'background-color: #DFDFFF;', 'value'=>''),
                         array('style'=>'background-color: #DFDFFF;', 'value'=>''),
@@ -1954,6 +1990,7 @@ class Utils_RecordBrowser extends Module {
 					} else $QF_c = '';
                     $gb_row->add_data(
                         $field,
+                        $args['name'],
                         isset($types[$args['type']])?$types[$args['type']]:$args['type'],
                         $args['visible']?'<b>'.__('Yes').'</b>':__('No'),
                         $args['required']?'<b>'.__('Yes').'</b>':__('No'),
@@ -2019,9 +2056,10 @@ class Utils_RecordBrowser extends Module {
         $form->addRule('field', __('Invalid field name.'), 'regex', '/^[a-zA-Z][a-zA-Z \(\)\%0-9]*$/');
         $form->addRule('field', __('Invalid field name.'), 'check_if_no_id');
 
+        $form->addElement('text', 'caption', __('Caption'), array('maxlength'=>255, 'placeholder' => __('Leave empty to use default label')));
 
         if ($action=='edit') {
-            $row = DB::GetRow('SELECT field, type, visible, required, param, filter, extra FROM '.$this->tab.'_field WHERE field=%s',array($field));
+            $row = DB::GetRow('SELECT field, caption, type, visible, required, param, filter, extra, position FROM '.$this->tab.'_field WHERE field=%s',array($field));
 			switch ($row['type']) {
 				case 'select':
 					$row['select_data_type'] = 'select';
@@ -2106,7 +2144,7 @@ class Utils_RecordBrowser extends Module {
 		$form->addElement('select', 'order_by', __('Order by'), array('key'=>__('Key'), 'value'=>__('Value')), array('id'=>'order_by'));
 		$form->addElement('text', 'commondata_table', __('CommonData table'), array('id'=>'commondata_table'));
 
-		$tables = array(''=>'---') + Utils_RecordBrowserCommon::list_installed_recordsets();
+		$tables = Utils_RecordBrowserCommon::list_installed_recordsets();
 		asort($tables);
 		$form->addElement('multiselect', 'rset', '<span id="rset_label">'.__('Recordset').'</span>', $tables, array('id'=>'rset'));
 		$form->addElement('text', 'label_field', __('Related field(s)'), array('id'=>'label_field'));
@@ -2129,7 +2167,7 @@ class Utils_RecordBrowser extends Module {
 		$form->addElement('text', 'QFfield_callback', __('Field generator function'), array('maxlength'=>255, 'style'=>'width:300px', 'id'=>'QFfield_callback'));
 		
         if ($action=='edit') {
-			if (!$row['extra']) $form->freeze('field');
+			$form->freeze('field');
 			$form->freeze('select_data_type');
 			$form->freeze('data_source');
 			$form->freeze('rset');
@@ -2144,6 +2182,7 @@ class Utils_RecordBrowser extends Module {
 
         if ($form->validate()) {
             $data = $form->exportValues();
+            $data['caption'] = trim($data['caption']);
             $data['field'] = trim($data['field']);
 			$type = DB::GetOne('SELECT type FROM '.$this->tab.'_field WHERE field=%s', array($field));
 			if (!isset($data['select_data_type'])) $data['select_data_type'] = $type;
@@ -2197,6 +2236,7 @@ class Utils_RecordBrowser extends Module {
 								$data['select_data_type'] = $data['select_type'];
 								if (!isset($row) || !isset($row['param'])) $row['param'] = ';::';
 								$props = explode(';', $row['param']);
+                                $change_param = false;
 								if($data['rset']) {
 								    $fs = explode(',', $data['label_field']);
 								    if($data['label_field']) foreach($data['rset'] as $rset) {
@@ -2204,13 +2244,19 @@ class Utils_RecordBrowser extends Module {
 	        							if (!empty($ret)) trigger_error('Invalid fields: '.implode(',',$fs));
 	        						    }
 	        						    $data['rset'] = implode(',',$data['rset']);
-	        						    $data['label_field'] = implode(',',$fs);
-								} else {
+	        						    $data['label_field'] = implode('|',$fs);
+                                    $change_param = true;
+								} else if ($action == 'add') {
 								    $data['rset'] = '__RECORDSETS__';
 								    $data['label_field'] = '';
+                                    $change_param = true;
 								}
-								$props[0] = $data['rset'].'::'.$data['label_field'];
-								$param = implode(';', $props);
+                                if ($change_param) {
+                                    $props[0] = $data['rset'].'::'.$data['label_field'];
+                                    $param = implode(';', $props);
+                                } else {
+                                    $param = $row['param'];
+                                }
 							}
 							if (isset($row) && isset($row['type']) && $row['type']=='multiselect' && $data['select_type']=='select') {
 								$ret = DB::Execute('SELECT id, f_'.$id.' AS v FROM '.$this->tab.'_data_1 WHERE f_'.$id.' IS NOT NULL');
@@ -2246,7 +2292,11 @@ class Utils_RecordBrowser extends Module {
                     $style = $data['select_data_type'];
                 else
                     $style = '';
-                Utils_RecordBrowserCommon::new_record_field($this->tab, $data['field'], $data['select_data_type'], 0, 0, $param, $style);
+                $new_field_data = array('name' => $data['field'], 'type' => $data['select_data_type'], 'param' => $param, 'style' => $style);
+                if (isset($this->admin_field['position']) && $this->admin_field['position']) {
+                    $new_field_data['position'] = (int) $this->admin_field['position'];
+                }
+                Utils_RecordBrowserCommon::new_record_field($this->tab, $new_field_data);
             }
             if(!isset($data['visible']) || $data['visible'] == '') $data['visible'] = 0;
             if(!isset($data['required']) || $data['required'] == '') $data['required'] = 0;
@@ -2255,7 +2305,7 @@ class Utils_RecordBrowser extends Module {
             foreach($data as $key=>$val)
                 if (is_string($val)) $data[$key] = htmlspecialchars($val);
 
-            DB::StartTrans();
+/*            DB::StartTrans();
             if ($id!=$new_id) {
                 Utils_RecordBrowserCommon::check_table_name($this->tab);
                 if(DB::is_postgresql())
@@ -2264,12 +2314,12 @@ class Utils_RecordBrowser extends Module {
                     $old_param = DB::GetOne('SELECT param FROM '.$this->tab.'_field WHERE field=%s', array($field));
                     DB::RenameColumn($this->tab.'_data_1', 'f_'.$id, 'f_'.$new_id, Utils_RecordBrowserCommon::actual_db_type($type, $old_param));
                 }
-            }
-            DB::Execute('UPDATE '.$this->tab.'_field SET param=%s, type=%s, field=%s, visible=%d, required=%d, filter=%d WHERE field=%s',
-                        array($param, $data['select_data_type'], $data['field'], $data['visible'], $data['required'], $data['filter'], $field));
-            DB::Execute('UPDATE '.$this->tab.'_edit_history_data SET field=%s WHERE field=%s',
+            }*/
+            DB::Execute('UPDATE '.$this->tab.'_field SET caption=%s, param=%s, type=%s, field=%s, visible=%d, required=%d, filter=%d WHERE field=%s',
+                        array($data['caption'], $param, $data['select_data_type'], $data['field'], $data['visible'], $data['required'], $data['filter'], $field));
+/*            DB::Execute('UPDATE '.$this->tab.'_edit_history_data SET field=%s WHERE field=%s',
                         array($new_id, $id));
-            DB::CompleteTrans();
+            DB::CompleteTrans();*/
 			
 			DB::Execute('DELETE FROM '.$this->tab.'_callback WHERE freezed=1 AND field=%s', array($field));
 			if ($data['display_callback'])
@@ -2316,7 +2366,7 @@ class Utils_RecordBrowser extends Module {
 		if ($type == 'select') {
 			if (!isset($data['data_source'])) $data['data_source'] = $this->admin_field['data_source'];
 			if (!isset($data['rset'])) $data['rset'] = $this->admin_field['rset'];
-			if (!is_array($data['rset'])) $data['rset'] = array($data['rset']);
+			if (!is_array($data['rset'])) $data['rset'] = array_filter(explode('__SEP__', $data['rset'])); // data from multiselect field passed in raw format here
 			if ($data['data_source']=='commondata' && $data['commondata_table']=='') $ret['commondata_table'] = __('Field required');
 			if ($data['data_source']=='rset') {
 				if ($data['label_field']!='') {
@@ -3120,7 +3170,8 @@ class Utils_RecordBrowser extends Module {
 			'add'=>__('Add'),
 			'delete'=>__('Delete'),
 			'print'=>__('Print'),
-			'export'=>__('Export')
+			'export'=>__('Export'),
+			'selection'=>__('Selection')
 		);
 	}
 	
@@ -3141,6 +3192,10 @@ class Utils_RecordBrowser extends Module {
 		$args = $this->table_rows[$all_fields[$this->tab][$field]];
 		$arr = array(''=>'['.__('Empty').']');
 		switch (true) {
+			case $args['type']=='text' && $args['filter']:
+				$arr_add = @DB::GetAssoc('SELECT f_'.$args['id'].', f_'.$args['id'].' FROM '.$this->tab.'_data_1 GROUP BY f_'.$args['id'].' ORDER BY count(*) DESC LIMIT 20');
+				if($arr_add) $arr += $arr_add;
+				break;
 			case $args['commondata']:
 				$array_id = is_array($args['param']) ? $args['param']['array_id'] : $args['ref_table'];
 				if (strpos($array_id, '::')===false) 
@@ -3166,25 +3221,31 @@ class Utils_RecordBrowser extends Module {
 				if (!$in_depth) continue;
 
 				$last_tab = $this->tab;
-				$this->tab = $args['ref_table'];
-				$this->init();
-				if (!isset($all_fields[$this->tab]))
-					foreach ($this->table_rows as $k=>$v)
-						$all_fields[$this->tab][$v['id']] = $k;
-						
+                $tabs = explode(',', $args['ref_table']);
+                if (count($tabs) != 1) break;
+                $one_tab = reset($tabs);
+                if ($one_tab != '__RECORDSETS__'
+                        && Utils_RecordBrowserCommon::check_table_name($one_tab, false, false)) {
+                    $this->tab = $one_tab;
+                    $this->init();
+                    if (!isset($all_fields[$this->tab]))
+                        foreach ($this->table_rows as $k=>$v)
+                            $all_fields[$this->tab][$v['id']] = $k;
 
-				foreach ($all_fields[$this->tab] as $k=>$v) {
-					if ($this->table_rows[$v]['type']=='calculated' || $this->table_rows[$v]['type']=='hidden') unset($all_fields[$this->tab][$k]);
-					else {
-						$arr2 = $this->permissions_get_field_values($k, false, $this->tab);
-						foreach ($arr2 as $k2=>$v2)
-							$arr2[$k2] = '"'.$k2.'":"'.$v2.'"';
-						eval_js('utils_recordbrowser__field_sub_values["'.$field.'__'.$k.'"] = {'.implode(',',$arr2).'};');
-					}
-				}
-				foreach ($all_fields[$this->tab] as $k=>$v) {
-					$arr[$k] = __(' records with %s set to ', array(_V($v)));
-				}
+
+                    foreach ($all_fields[$this->tab] as $k=>$v) {
+                        if ($this->table_rows[$v]['type']=='calculated' || $this->table_rows[$v]['type']=='hidden') unset($all_fields[$this->tab][$k]);
+                        else {
+                            $arr2 = $this->permissions_get_field_values($k, false, $this->tab);
+                            foreach ($arr2 as $k2=>$v2)
+                                $arr2[$k2] = '"'.$k2.'":"'.$v2.'"';
+                            eval_js('utils_recordbrowser__field_sub_values["'.$field.'__'.$k.'"] = {'.implode(',',$arr2).'};');
+                        }
+                    }
+                    foreach ($all_fields[$this->tab] as $k=>$v) {
+                        $arr[$k] = __(' records with %s set to ', array(_V($v)));
+                    }
+                }
 
 				$this->tab = $last_tab;
 				$this->init();

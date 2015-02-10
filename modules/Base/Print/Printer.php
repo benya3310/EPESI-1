@@ -85,10 +85,6 @@ abstract class Base_Print_Printer
     protected function new_section()
     {
         $smarty = Base_ThemeCommon::init_smarty();
-        if (DEMO_MODE || HOSTING_MODE) {
-            $smarty->security = true;
-            $smarty->security_settings['PHP_TAGS'] = false;
-        }
         return $smarty;
     }
 
@@ -203,7 +199,14 @@ abstract class Base_Print_Printer
         }
         return $this->get_document();
     }
-
+    
+    /**
+     * Get document config array.
+     */
+    public function get_document_config() {
+        return array();
+    }
+    
     /**
      * Fill the template with default template's sections.
      */
