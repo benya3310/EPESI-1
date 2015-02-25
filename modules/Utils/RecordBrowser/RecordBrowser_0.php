@@ -70,6 +70,7 @@ class Utils_RecordBrowser extends Module {
     public $form = null;
     public $tab;
     public $grid = null;
+    private $fixed_columns_class = array('Utils_RecordBrowser__favs', 'Utils_RecordBrowser__watchdog');
 
 	public function new_button($type, $label, $href) {
 		if ($this->fullscreen_table)
@@ -654,6 +655,9 @@ class Utils_RecordBrowser extends Module {
         else $gb = $this->init_module('Utils/GenericBrowser', null, $this->tab);
 
         if(!$pdf) $gb->set_expandable(true);
+        
+        if($pdf) $gb->set_resizable_columns(false);
+        else $gb->set_fixed_columns_class($this->fixed_columns_class);
 
         if ($special) {
             $gb_per_page = Base_User_SettingsCommon::get('Utils/GenericBrowser','per_page');
@@ -679,12 +683,12 @@ class Utils_RecordBrowser extends Module {
         } else {
             $table_columns = array();
             if (!$pdf && !$admin && $this->favorites) {
-                $fav = array('name'=>'&nbsp;', 'width'=>'24px');
+                $fav = array('name'=>'&nbsp;', 'width'=>'24px', 'attrs'=>'class="Utils_RecordBrowser__favs"');
                 if (!isset($this->force_order)) $fav['order'] = ':Fav';
                 $table_columns[] = $fav;
             }
             if (!$pdf && !$admin && $this->watchdog)
-                $table_columns[] = array('name'=>'', 'width'=>'24px');
+                $table_columns[] = array('name'=>'', 'width'=>'24px', 'attrs'=>'class="Utils_RecordBrowser__watchdog"');
         }
         if (!$this->disabled['quickjump']) $quickjump = DB::GetOne('SELECT quickjump FROM recordbrowser_table_properties WHERE tab=%s', array($this->tab));
         else $quickjump = '';
@@ -707,7 +711,7 @@ class Utils_RecordBrowser extends Module {
 			}
             $arr['name'] = _V($arr['name']); // ****** Translate field name for table header
             if (isset($this->more_table_properties[$args['id']])) {
-                foreach (array('name','wrapmode','width','display') as $v) if (isset($this->more_table_properties[$args['id']][$v])) {
+                foreach (array('name','wrapmode','width','display','order') as $v) if (isset($this->more_table_properties[$args['id']][$v])) {
                     if (is_numeric($this->more_table_properties[$args['id']][$v]) && $v=='width') $this->more_table_properties[$args['id']][$v] = $this->more_table_properties[$args['id']][$v]*10;
                     $arr[$v] = $this->more_table_properties[$args['id']][$v];
                 }
@@ -1879,8 +1883,10 @@ class Utils_RecordBrowser extends Module {
             array('name'=>__('Caption'), 'width'=>20),
             array('name'=>__('Type'), 'width'=>10),
             array('name'=>__('Table view'), 'width'=>5),
+            array('name'=>__('Tooltip'), 'width'=>5),
             array('name'=>__('Required'), 'width'=>5),
             array('name'=>__('Filter'), 'width'=>5),
+            array('name'=>__('Export'), 'width'=>5),
             array('name'=>__('Parameters'), 'width'=>27),
             array('name'=>__('Value display function'), 'width'=>5),
             array('name'=>__('Field generator function'), 'width'=>5)
@@ -1975,6 +1981,8 @@ class Utils_RecordBrowser extends Module {
                         array('style'=>'background-color: #DFDFFF;', 'value'=>''),
                         array('style'=>'background-color: #DFDFFF;', 'value'=>''),
                         array('style'=>'background-color: #DFDFFF;', 'value'=>''),
+                        array('style'=>'background-color: #DFDFFF;', 'value'=>''),
+                        array('style'=>'background-color: #DFDFFF;', 'value'=>''),
                         array('style'=>'background-color: #DFDFFF;', 'value'=>'')
                     );
                 else {
@@ -1993,8 +2001,10 @@ class Utils_RecordBrowser extends Module {
                         $args['name'],
                         isset($types[$args['type']])?$types[$args['type']]:$args['type'],
                         $args['visible']?'<b>'.__('Yes').'</b>':__('No'),
+                        $args['tooltip']?'<b>'.__('Yes').'</b>':__('No'),
                         $args['required']?'<b>'.__('Yes').'</b>':__('No'),
                         $args['filter']?'<b>'.__('Yes').'</b>':__('No'),
+                        $args['export']?'<b>'.__('Yes').'</b>':__('No'),
                         is_array($args['param'])?serialize($args['param']):$args['param'],
 						$d_c,
 						$QF_c
@@ -2059,7 +2069,7 @@ class Utils_RecordBrowser extends Module {
         $form->addElement('text', 'caption', __('Caption'), array('maxlength'=>255, 'placeholder' => __('Leave empty to use default label')));
 
         if ($action=='edit') {
-            $row = DB::GetRow('SELECT field, caption, type, visible, required, param, filter, extra, position FROM '.$this->tab.'_field WHERE field=%s',array($field));
+            $row = DB::GetRow('SELECT field, caption, type, visible, required, param, filter, export, tooltip, extra, position FROM '.$this->tab.'_field WHERE field=%s',array($field));
 			switch ($row['type']) {
 				case 'select':
 					$row['select_data_type'] = 'select';
@@ -2152,8 +2162,10 @@ class Utils_RecordBrowser extends Module {
 		$form->addFormRule(array($this, 'check_field_definitions'));
 
 		$form->addElement('checkbox', 'visible', __('Table view'));
+		$form->addElement('checkbox', 'tooltip', __('Tooltip view'));
 		$form->addElement('checkbox', 'required', __('Required'), null, array('id'=>'required'));
 		$form->addElement('checkbox', 'filter', __('Filter enabled'), null, array('id' => 'filter'));
+		$form->addElement('checkbox', 'export', __('Export'));
         
         $form->addElement('text', 'autonumber_prefix', __('Prefix string'), array('id' => 'autonumber_prefix'));
         $form->addRule('autonumber_prefix', __('Double underscore is not allowed'), 'callback', array('Utils_RecordBrowser', 'qf_rule_without_double_underscore'));
@@ -2301,6 +2313,8 @@ class Utils_RecordBrowser extends Module {
             if(!isset($data['visible']) || $data['visible'] == '') $data['visible'] = 0;
             if(!isset($data['required']) || $data['required'] == '') $data['required'] = 0;
             if(!isset($data['filter']) || $data['filter'] == '') $data['filter'] = 0;
+            if(!isset($data['export']) || $data['export'] == '') $data['export'] = 0;
+            if(!isset($data['tooltip']) || $data['tooltip'] == '') $data['tooltip'] = 0;
 
             foreach($data as $key=>$val)
                 if (is_string($val)) $data[$key] = htmlspecialchars($val);
@@ -2315,8 +2329,8 @@ class Utils_RecordBrowser extends Module {
                     DB::RenameColumn($this->tab.'_data_1', 'f_'.$id, 'f_'.$new_id, Utils_RecordBrowserCommon::actual_db_type($type, $old_param));
                 }
             }*/
-            DB::Execute('UPDATE '.$this->tab.'_field SET caption=%s, param=%s, type=%s, field=%s, visible=%d, required=%d, filter=%d WHERE field=%s',
-                        array($data['caption'], $param, $data['select_data_type'], $data['field'], $data['visible'], $data['required'], $data['filter'], $field));
+            DB::Execute('UPDATE '.$this->tab.'_field SET caption=%s, param=%s, type=%s, field=%s, visible=%d, required=%d, filter=%d, export=%d, tooltip=%d WHERE field=%s',
+                        array($data['caption'], $param, $data['select_data_type'], $data['field'], $data['visible'], $data['required'], $data['filter'], $data['export'], $data['tooltip'], $field));
 /*            DB::Execute('UPDATE '.$this->tab.'_edit_history_data SET field=%s WHERE field=%s',
                         array($new_id, $id));
             DB::CompleteTrans();*/
@@ -2765,6 +2779,7 @@ class Utils_RecordBrowser extends Module {
             $header[] = $arr;
         }
         $gb->set_table_columns($header);
+        $gb->set_fixed_columns_class($this->fixed_columns_class);
 
         $clean_order = array();
         foreach($order as $k=>$v) {

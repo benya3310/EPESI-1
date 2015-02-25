@@ -373,6 +373,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
                         'required'=>($row['type']=='calculated'?false:$row['required']),
                         'extra'=>$row['extra'],
                         'active'=>$row['active'],
+                        'export'=>$row['export'],
+                        'tooltip'=>$row['tooltip'],
                         'position'=>$row['position'],
                         'processing_order' => $row['processing_order'],
                         'filter'=>$row['filter'],
@@ -438,7 +440,9 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
                     'type C(32),'.
                     'extra I1 DEFAULT 1,'.
                     'visible I1 DEFAULT 1,'.
+                    'tooltip I1 DEFAULT 1,'.
                     'required I1 DEFAULT 1,'.
+                    'export I1 DEFAULT 1,'.
                     'active I1 DEFAULT 1,'.
                     'position I2,'.
                     'processing_order I2 NOTNULL,'.
@@ -555,6 +559,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         DB::Execute('DELETE FROM recordbrowser_processing_methods WHERE tab=%s', array($tab));
         DB::Execute('DELETE FROM recordbrowser_browse_mode_definitions WHERE tab=%s', array($tab));
         DB::Execute('DELETE FROM recordbrowser_clipboard_pattern WHERE tab=%s', array($tab));
+        DB::Execute('DELETE FROM recordbrowser_addon WHERE tab=%s', array($tab));
         return true;
     }
 
@@ -614,7 +619,9 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
             }
         }
         if (!isset($definition['extra'])) $definition['extra'] = true;
+        if (!isset($definition['export'])) $definition['export'] = true;
         if (!isset($definition['visible'])) $definition['visible'] = false;
+        if (!isset($definition['tooltip'])) $definition['tooltip'] = $definition['visible'];
         if (!isset($definition['required'])) $definition['required'] = false;
         if (!isset($definition['filter'])) $definition['filter'] = false;
         if (!isset($definition['position'])) $definition['position'] = null;
@@ -658,7 +665,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
             }
         }
         $f = self::actual_db_type($definition['type'], $param);
-        DB::Execute('INSERT INTO '.$tab.'_field(field, caption, type, visible, param, style, position, processing_order, extra, required, filter) VALUES(%s, %s, %s, %d, %s, %s, %d, %d, %d, %d, %d)', array($definition['name'], $definition['caption'], $definition['type'], $definition['visible']?1:0, $param, $definition['style'], $definition['position'], $definition['processing_order'], $definition['extra']?1:0, $definition['required']?1:0, $definition['filter']?1:0));
+        DB::Execute('INSERT INTO '.$tab.'_field(field, caption, type, visible, param, style, position, processing_order, extra, required, filter, export, tooltip) VALUES(%s, %s, %s, %d, %s, %s, %d, %d, %d, %d, %d, %d, %d)', array($definition['name'], $definition['caption'], $definition['type'], $definition['visible']?1:0, $param, $definition['style'], $definition['position'], $definition['processing_order'], $definition['extra']?1:0, $definition['required']?1:0, $definition['filter']?1:0, $definition['export']?1:0, $definition['tooltip']?1:0));
 		$column = 'f_'.self::get_field_id($definition['name']);
 		if ($alter) {
 			self::init($tab, false, true);
@@ -2199,7 +2206,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return self::record_link_open_tag($tab, $id, $nolink) . 
                 implode(' ', $vals ) . self::record_link_close_tag();
     }
-    public static function create_default_linked_label($tab, $id, $nolink=false, $table_name=true){
+    public static function create_default_linked_label($tab, $id, $nolink=false, $table_name=true, $detailed_tooltip = true){
         if (!is_numeric($id)) return '';
         $rec = self::get_record($tab,$id);
         if(!$rec) return '';
@@ -2225,7 +2232,28 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
                 $label = ($table_name?$cap.': ':'').self::get_val($tab,$field,$rec,$nolink);
         }
         $ret = self::record_link_open_tag($tab, $id, $nolink).$label.self::record_link_close_tag();
+        if ($nolink == false && $detailed_tooltip
+            && Utils_TooltipCommon::is_tooltip_code_in_str($ret) == false) {
+            $ret = Utils_TooltipCommon::ajax_create($ret, array(__CLASS__, 'default_record_tooltip'), array($tab, $id));
+        }
         return $ret;
+    }
+
+    public static function default_record_tooltip($tab, $record_id)
+    {
+        $record = self::get_record($tab, $record_id);
+        if (!$record[':active']) {
+            return '';
+        }
+        $cols = self::init($tab);
+        $access = self::get_access($tab, 'view', $record);
+        $data = array();
+        foreach ($cols as $c) {
+            if ($c['tooltip'] && $access[$c['id']]) {
+                $data[_V($c['name'])] = self::get_val($tab, $c['id'], $record, true);
+            }
+        }
+        return Utils_TooltipCommon::format_info_tooltip($data);
     }
     public static function create_linked_label_r($tab, $cols, $r, $nolink=false){
         if (!is_array($cols))
