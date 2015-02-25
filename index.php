@@ -115,7 +115,10 @@ private function print_html_header($title)
 
         <link type="text/css" href="libs/jquery-ui-1.10.1.custom.min.css"
               rel="stylesheet">
-        <link type="text/css" href="style/css/epesi.css" rel="stylesheet">
+        <link type="text/css" href="style/css/base.css" rel="stylesheet">
+        <?php if (file_exists('style/css/custom.css')) { ?>
+            <link type="text/css" href="style/css/custom.css" rel="stylesheet">
+        <?php } ?>
         <?php if (DIRECTION_RTL) { ?>
             <style type="text/css">
                 body {
