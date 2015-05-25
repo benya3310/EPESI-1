@@ -122,6 +122,13 @@ class CRM_TasksCommon extends ModuleCommon {
 	public static function display_employees($record, $nolink, $desc) {
 		return CRM_ContactsCommon::display_contacts_with_notification('task', $record, $nolink, $desc);
 	}
+	public static function display_deadline($record, $nolink, $desc) {
+	        if(!$record['deadline']) return '';
+	        $deadline = strtotime($record['deadline'].' '.date('H:i:s',strtotime($record['deadline_time'])));
+	        $ret = Base_RegionalSettingsCommon::time2reg($record['deadline'],false);
+	        if($deadline<time()) $ret = '<span style="color:red;font-weight:bold;">'.$ret.'</span>';
+		return Utils_TooltipCommon::create($ret,Base_RegionalSettingsCommon::time2reg($deadline));
+	}
     public static function display_title($record, $nolink) {
 		$ret = Utils_RecordBrowserCommon::create_linked_label_r('task', 'Title', $record, $nolink);
 		if (isset($record['description']) && $record['description']!='' && !MOBILE_DEVICE) $ret = '<span '.Utils_TooltipCommon::open_tag_attrs(Utils_RecordBrowserCommon::format_long_text($record['description']), false).'>'.$ret.'</span>';
@@ -199,6 +206,7 @@ class CRM_TasksCommon extends ModuleCommon {
 			$ret['new']['note'] = Utils_RecordBrowser::$rb_obj->add_note_button('task/'.$values['id']);
 			return $ret;
 		case 'adding':
+			$values['deadline_time'] = strtotime(date('Y-m-d').' 23:59:59');
 			$values['permission'] = Base_User_SettingsCommon::get('CRM_Common','default_record_permission');
 			break;
 		case 'add':
@@ -271,7 +279,7 @@ class CRM_TasksCommon extends ModuleCommon {
 	
 	public static function mobile_tasks() {
 		$me = CRM_ContactsCommon::get_my_record();
-		$defaults = array('employees'=>array($me['id']),'status'=>0, 'permission'=>0, 'priority'=>1);
+		$defaults = array('employees'=>array($me['id']),'status'=>0, 'permission'=>0, 'priority'=> CRM_CommonCommon::get_default_priority());
 		Utils_RecordBrowserCommon::mobile_rb('task',array('employees'=>array($me['id']),'status'=>array(0,1)),array('deadline'=>'ASC', 'priority'=>'DESC', 'title'=>'ASC'),array('priority'=>1, 'deadline'=>1,'longterm'=>1),$defaults);
 	}
 
@@ -315,7 +323,7 @@ class CRM_TasksCommon extends ModuleCommon {
 		$x = ModuleManager::get_instance('/Base_Box|0');
 		if(!$x) trigger_error('There is no base box module instance',E_USER_ERROR);
 		$me = CRM_ContactsCommon::get_my_record();
-		$defaults = array('employees'=>$me['id'], 'priority'=>1, 'permission'=>0, 'status'=>0);
+		$defaults = array('employees'=>$me['id'], 'priority'=>CRM_CommonCommon::get_default_priority(), 'permission'=>0, 'status'=>0);
 		$defaults['deadline'] = date('Y-m-d', $timestamp);
 		if($object) $defaults['employees'] = $object;
 		$x->push_main('Utils_RecordBrowser','view_entry',array('add', null, $defaults), 'task');
@@ -366,6 +374,10 @@ class CRM_TasksCommon extends ModuleCommon {
 			$r = $id;
 			$id = $r['id'];
 		}
+        $r = Utils_RecordBrowserCommon::filter_record_by_access('task', $r);
+        if (!$r) {
+            return null;
+        }
 
 		$next = array('type'=>__('Task'));
 		
@@ -458,7 +470,7 @@ class CRM_TasksCommon extends ModuleCommon {
             $key = array_search($default, $rss);
             if ($key !== false) 
                 unset($rss[$key]);
-            $tabs = DB::GetAssoc('SELECT tab, caption FROM recordbrowser_table_properties WHERE tab not in (\'' . implode('\',\'', $rss) . '\') AND tab not like "%_related"');
+            $tabs = DB::GetAssoc('SELECT tab, caption FROM recordbrowser_table_properties WHERE tab not in (\'' . implode('\',\'', $rss) . '\') AND tab not like %s', array('%_related'));
             foreach ($tabs as $k => $v) {
                 $tabs[$k] = _V($v) . " ($k)";
             }

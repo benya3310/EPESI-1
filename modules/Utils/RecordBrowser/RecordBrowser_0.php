@@ -121,11 +121,32 @@ class Utils_RecordBrowser extends Module {
         $this->jump_to_new_record = $arg;
     }
 
+    /**
+     * @param string $ar Field name
+     *
+     * @deprecated
+     * @return callable Display callback
+     */
     public function get_display_method($ar) {
+        return $this->get_display_callback($ar);
+    }
+
+    public function get_display_callback($ar) {
         return isset($this->display_callback_table[$ar])?$this->display_callback_table[$ar]:null;
     }
-    
-    public function get_qffield_method($field) {
+
+    /**
+     * @param string $field Field name
+     *
+     * @deprecated
+     * @return callable QFfield callback
+     */
+    public function get_qffield_method($field)
+    {
+        return $this->get_QFfield_callback($field);
+    }
+
+    public function get_QFfield_callback($field) {
         return isset($this->QFfield_callback_table[$field]) ? $this->QFfield_callback_table[$field] : null;
     }
 
@@ -208,8 +229,8 @@ class Utils_RecordBrowser extends Module {
         if($this->tab=='__RECORDSETS__' || preg_match('/,/',$this->tab)) return;
         $ret = DB::Execute('SELECT * FROM '.$this->tab.'_callback');
         while ($row = $ret->FetchRow())
-            if ($row['freezed']==1) $this->display_callback_table[$row['field']] = explode('::',$row['callback']);
-            else $this->QFfield_callback_table[$row['field']] = explode('::',$row['callback']);
+            if ($row['freezed']==1) $this->display_callback_table[$row['field']] = $row['callback'];
+            else $this->QFfield_callback_table[$row['field']] = $row['callback'];
     }
 
     public function check_for_jump() {
@@ -343,7 +364,6 @@ class Utils_RecordBrowser extends Module {
 
 		$empty_defaults = array();
         $filters = array();
-        $text_filters = array();
         foreach ($filters_all as $filter) {
             $filter_id = preg_replace('/[^a-z0-9]/','_',strtolower($filter));
             $field_id = 'filter__'.$filter_id;
@@ -393,7 +413,9 @@ class Utils_RecordBrowser extends Module {
 					$parts = explode('::', $this->table_rows[$filter]['param']['array_id']);
 					$array_id = array_shift($parts);
 					$arr = Utils_CommonDataCommon::get_translated_array($array_id, $this->table_rows[$filter]['param']['order_by_key']);
+					$made_of_parts = false;
 					while (!empty($parts)) {
+						$made_of_parts = true;
 						array_shift($parts);
 						$next_arr = array();
 						foreach ($arr as $k=>$v) {
@@ -403,7 +425,7 @@ class Utils_RecordBrowser extends Module {
 						}
 						$arr = $next_arr;
 					}
-                    natcasesort($arr);
+                    if ($made_of_parts) natcasesort($arr);
             } else {
                     $param = explode(';',$this->table_rows[$filter]['param']);
                     $x = explode('::',$param[0]);
@@ -436,22 +458,33 @@ class Utils_RecordBrowser extends Module {
                             }
                         }
                         if($tab!='__RECORDSETS__' && !preg_match('/,/',$tab)) {
-                            $qty = Utils_RecordBrowserCommon::get_records_count($tab,$crits);
-                            if($qty <= Utils_RecordBrowserCommon::$options_limit) {
-                                $ret2 = Utils_RecordBrowserCommon::get_records($tab,$crits,$col);
-                                if (count($col)!=1) {
-                                    foreach ($ret2 as $k=>$v) {
-                                        $txt = array();
-                                        foreach ($col as $kk=>$vv)
-                                            $txt[] = $v[$vv];
-                                        $arr[$k] = implode(' ',$txt);
-                                    }
-                                } else {
-                                    foreach ($ret2 as $k=>$v) {
-                                        $arr[$k] = $v[$col[0]];
-                                    }
-                                }
-                                natcasesort($arr);
+                        	$qty = Utils_RecordBrowserCommon::get_records_count($tab,$crits);
+                        	if($qty <= Utils_RecordBrowserCommon::$options_limit) {
+                          		$tpro = DB::GetRow('SELECT description_callback FROM recordbrowser_table_properties WHERE tab=%s',array($tab));
+                            	if ($tpro) {
+                            		$descr = $tpro['description_callback'];
+                            		if($descr) {
+                            			if(preg_match('/::/',$descr)) {
+                            				$descr = explode('::',$descr);
+                            			}
+                            			if(!is_callable($descr))
+                            				$descr = '';
+                            		}
+                            	}
+                             	$ret2 = Utils_RecordBrowserCommon::get_records($tab,$crits);
+                             	foreach ($ret2 as $k=>$v) {
+									if (empty($descr)) {
+	                               		$txt = array();
+	                                	foreach ($col as $kk=>$vv)
+	                                		$txt[] = Utils_RecordBrowserCommon::get_val($tab,$vv,$v,true);
+	                                	$option_label = implode(' ',$txt);
+                                	}
+                                	else {
+                                		$option_label = call_user_func($descr,$v,true);
+                                	}
+                                	$arr[$k] = $option_label;
+                            	}
+                            	natcasesort($arr);
                             } else {
                                 $arr = array();
                                 $autoselect = true;
@@ -535,11 +568,11 @@ class Utils_RecordBrowser extends Module {
             } else {
                 if (in_array($this->table_rows[$filter]['type'], array('currency','float','integer','autonumber')) || ($this->table_rows[$filter]['type'] == 'calculated' && $this->table_rows[$filter]['param'] != '' && in_array($this->table_rows[$filter]['style'], array('currency','float','integer','autonumber')))) {
                     if (isset($vals[$field_id.'__currency']) && $vals[$field_id.'__currency'] != "__NULL__")
-                        $this->crits["~$filter"] = "%__" . $vals[$field_id.'__currency'];
+                        $this->crits["~$filter_id"] = "%__" . $vals[$field_id.'__currency'];
                     if (isset($vals[$field_id.'__from']) && $vals[$field_id.'__from'] !== "")
-                        $this->crits[">=\"$filter"] = floatval($vals[$field_id.'__from']);
+                        $this->crits[">=$filter_id"] = floatval($vals[$field_id.'__from']);
                     if (isset($vals[$field_id.'__to']) && $vals[$field_id.'__to'] !== "")
-                        $this->crits["<=\"$filter"] = floatval($vals[$field_id.'__to']);
+                        $this->crits["<=$filter_id"] = floatval($vals[$field_id.'__to']);
                     continue;
                 }
 				if ($this->table_rows[$filter]['type']=='timestamp' || $this->table_rows[$filter]['type']=='date') {
@@ -549,32 +582,18 @@ class Utils_RecordBrowser extends Module {
 						$this->crits['<='.$filter_id] = $vals[$field_id.'__to'].' 23:59:59';
 					continue;
 				}
-                if (!isset($text_filters[$filter_id])) {
-                    if (!isset($vals['filter__'.$filter_id]) || ($this->table_rows[$filter]['type']=='select' && $vals['filter__'.$filter_id]==='')) $vals['filter__'.$filter_id]='__NULL__';
-					if ($vals['filter__'.$filter_id]==='__NULL__') continue;
-					if ($this->table_rows[$filter]['type']=='commondata') {
-						$vals2 = explode('/',$vals['filter__'.$filter_id]);
-						$param = explode('::',$this->table_rows[$filter]['param']['array_id']);
-						array_shift($param);
-						$param[] = $filter_id;
-						foreach ($vals2 as $v)
-							$this->crits[preg_replace('/[^a-z0-9]/','_',strtolower(array_shift($param)))] = $v;
-					} else {
-						$this->crits[$filter_id] = $vals['filter__'.$filter_id];
-                        if ($this->table_rows[$filter]['type']=='checkbox' && $this->crits[$filter_id]=='') $this->crits[$filter_id] = array(null,0);
-					}
+                if (!isset($vals['filter__'.$filter_id]) || ($this->table_rows[$filter]['type']=='select' && $vals['filter__'.$filter_id]==='')) $vals['filter__'.$filter_id]='__NULL__';
+                if ($vals['filter__'.$filter_id]==='__NULL__') continue;
+                if ($this->table_rows[$filter]['type']=='commondata') {
+                    $vals2 = explode('/',$vals['filter__'.$filter_id]);
+                    $param = explode('::',$this->table_rows[$filter]['param']['array_id']);
+                    array_shift($param);
+                    $param[] = $filter_id;
+                    foreach ($vals2 as $v)
+                        $this->crits[preg_replace('/[^a-z0-9]/','_',strtolower(array_shift($param)))] = $v;
                 } else {
-                    if (!isset($vals['filter__'.$filter_id])) $vals['filter__'.$filter_id]='';
-                    if ($vals['filter__'.$filter_id]!=='') {
-                        $args = $this->table_rows[$filter];
-                        $str = explode(';', $args['param']);
-                        $ref = explode('::', $str[0]);
-                        if ($ref[0]!='' && isset($ref[1])) $this->crits['_"'.$args['id'].'['.$args['ref_field'].']'] = DB::Concat(DB::qstr($vals['filter__'.$filter_id]),DB::qstr('%'));;
-                        if ($args['type']=='commondata' || $ref[0]=='__COMMON__') {
-							$val = array_pop(explode('/',$vals['filter__'.$filter_id]));
-                            if (!isset($ref[1]) || $ref[0]=='__COMMON__') $this->crits['_"'.$args['id'].'['.$args['ref_field'].']'] = DB::Concat(DB::qstr($val),DB::qstr('%'));;
-                        }
-                    }
+                    $this->crits[$filter_id] = $vals['filter__'.$filter_id];
+                    if ($this->table_rows[$filter]['type']=='checkbox' && $this->crits[$filter_id]=='') $this->crits[$filter_id] = array(null,0);
                 }
             }
         }
@@ -805,12 +824,9 @@ class Utils_RecordBrowser extends Module {
                 $v = explode(' ', $v);
                 foreach ($v as $w) {
 					if (!$args['commondata']) {
-						$w = DB::Concat(DB::qstr('%'),DB::qstr($w),DB::qstr('%'));
-						$op = '"';
-					} else {
-						$op = '';
+						$w = "%$w%";
 					}
-                    $search_res = Utils_RecordBrowserCommon::merge_crits($search_res, array('~'.$op.$k =>$w));
+                    $search_res = Utils_RecordBrowserCommon::merge_crits($search_res, array('~'.$k =>$w));
 				}
             }
         } else {
@@ -833,13 +849,11 @@ class Utils_RecordBrowser extends Module {
 					if ($args['commondata']) $k = $k.'[]';
 					elseif (isset($args['ref_field']) && $args['ref_field']) $k = $k.'['.Utils_RecordBrowserCommon::get_field_id($args['ref_field']).']';
 					if (!$args['commondata']) {
-						$w = DB::Concat(DB::qstr('%'),DB::qstr($vv),DB::qstr('%'));
-						$op = '"';
+						$w = "%$vv%";
 					} else {
 						$w = $vv;
-						$op = '';
 					}
-                    $search_res = Utils_RecordBrowserCommon::merge_crits($search_res, array('~'.$op.$k =>$w));
+                    $search_res = Utils_RecordBrowserCommon::merge_crits($search_res, array('~'.$k =>$w));
                 }
             }
             $search_res = Utils_RecordBrowserCommon::merge_crits($search_res, $leftovers);
@@ -1244,6 +1258,9 @@ class Utils_RecordBrowser extends Module {
         self::$tab_param = $tb->get_path();
 
         $form = $this->init_module('Libs/QuickForm',null, $mode);
+        if(Base_User_SettingsCommon::get($this->get_type(), 'confirm_leave') && ($mode == 'add' || $mode == 'edit'))
+        	$form->set_confirm_leave_page();
+        
         $this->form = $form;
 
         if($mode!='add')
@@ -1445,11 +1462,11 @@ class Utils_RecordBrowser extends Module {
 					if ($default_tab===($tab_counter+1) || $tb->get_tab()==($tab_counter+1)) $default_tab = $tab_counter+2;
 				} else
 					$additional_tabs++;
+				$tab_counter++;
 			}
             $cols = $row['param'];
             $last_page = $pos;
             if ($row) $label = $row['field'];
-            $tab_counter++;
         }
 		if ($default_tab!==null) $tb->set_default_tab($default_tab);
         if ($mode!='history') {
@@ -1497,7 +1514,6 @@ class Utils_RecordBrowser extends Module {
 		
         if ($this->switch_to_addon) {
     	    $this->set_module_variable('switch_to_addon',false);
-            if($tab_counter<0) $tab_counter=0;
             $ret = DB::Execute('SELECT * FROM recordbrowser_addon WHERE tab=%s AND enabled=1 ORDER BY pos', array($this->tab));
             while ($row = $ret->FetchRow()) {
                 if (ModuleManager::is_installed($row['module'])==-1) continue;
@@ -1506,8 +1522,8 @@ class Utils_RecordBrowser extends Module {
                     if (isset($result['show']) && $result['show']==false) continue;
                     $row['label'] = $result['label'];
                 }
-                if ($row['label']==$this->switch_to_addon) $this->switch_to_addon = $tab_counter;
                 $tab_counter++;
+                if ($row['label']==$this->switch_to_addon) $this->switch_to_addon = $tab_counter;
             }
             $tb->switch_tab($this->switch_to_addon);
             location(array());
@@ -1633,7 +1649,7 @@ class Utils_RecordBrowser extends Module {
             if (!is_callable($ff))
                 continue;
 
-            call_user_func_array($ff, array(&$form, $args['id'], $label, $mode, $mode=='add'?(isset($this->custom_defaults[$args['id']])?$this->custom_defaults[$args['id']]:''):$record[$args['id']], $args, $this, $this->display_callback_table));
+            Utils_RecordBrowserCommon::call_QFfield_callback($ff,$form, $args['id'], $label, $mode, $mode=='add'?(isset($this->custom_defaults[$args['id']])?$this->custom_defaults[$args['id']]:''):$record[$args['id']], $args, $this, $this->display_callback_table);
 
             if ($args['required']) {
                 $el = $form->getElement($args['id']);
@@ -1725,7 +1741,9 @@ class Utils_RecordBrowser extends Module {
         $r = DB::GetRow('SELECT caption,favorites,recent,full_history,jump_to_id,search_include,search_priority FROM recordbrowser_table_properties WHERE tab=%s',array($this->tab));
         $form->addElement('text', 'caption', __('Caption'));
         $form->addElement('select', 'favorites', __('Favorites'), array(__('No'), __('Yes')));
-        $form->addElement('select', 'recent', __('Recent'), array(__('No'), __('Yes')));
+        $recent_values = array(0 => __('No'));
+        foreach (array(5, 10, 15, 20, 25) as $rv) { $recent_values[$rv] = "$rv " . __('Records') ; }
+        $form->addElement('select', 'recent', __('Recent'), $recent_values);
         $form->addElement('select', 'full_history', __('History'), array(__('No'), __('Yes')));
         $form->addElement('select', 'jump_to_id', __('Jump to ID'), array(__('No'), __('Yes')));
         $form->addElement('select', 'search_include', __('Search'), array(__('Exclude'), __('Include by default'), __('Include optional')));
@@ -1739,20 +1757,20 @@ class Utils_RecordBrowser extends Module {
         if($r) $form->setDefaults($r);
         $form->display_as_column();
         if ($full_access) {
-            $clean_index_href = $this->create_confirm_callback_href(__('Are you sure?'), array($this, 'clean_search_index'), array($this->tab));
-            echo "<a $clean_index_href>" . __('Clean search index') . "</a>";
+            $clear_index_href = $this->create_confirm_callback_href(__('Are you sure?'), array($this, 'clear_search_index'), array($this->tab));
+            echo "<a $clear_index_href>" . __('Clear search index') . "</a>";
             if ($form->validate()) {
-                DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,favorites=%b,recent=%b,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
+                DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,favorites=%b,recent=%d,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
                             array($form->exportValue('caption'), $form->exportValue('favorites'), $form->exportValue('recent'), $form->exportValue('full_history'), $form->exportValue('jump_to_id'), $form->exportValue('search_include'), $form->exportValue('search_priority'), $this->tab));
             }
         }
     }
 
-    public function clean_search_index($tab)
+    public function clear_search_index($tab)
     {
-        $ret = Utils_RecordBrowserCommon::clean_search_index($tab);
+        $ret = Utils_RecordBrowserCommon::clear_search_index($tab);
         if ($ret) {
-            Base_StatusBarCommon::message(__('Index cleaned for this table. Indexing again - it may take some time.'));
+            Base_StatusBarCommon::message(__('Index cleared for this table. Indexing again - it may take some time.'));
         }
     }
 
@@ -1986,16 +2004,28 @@ class Utils_RecordBrowser extends Module {
                         array('style'=>'background-color: #DFDFFF;', 'value'=>'')
                     );
                 else {
-					if (isset($display_callbacbacks[$field])) {
-						$d_c = '<b>Yes</b>';
-						if (!is_callable(explode('::', $display_callbacbacks[$field]))) $d_c = '<span style="color:red;font-weight:bold;">Invalid!</span>';
-						$d_c = Utils_TooltipCommon::create($d_c, $display_callbacbacks[$field], false);
-					} else $d_c = '';
-					if (isset($QFfield_callbacbacks[$field])) {
-						$QF_c = '<b>Yes</b>';
-						if (!is_callable(explode('::', $QFfield_callbacbacks[$field]))) $QF_c = '<span style="color:red;font-weight:bold;">Invalid!</span>';
-						$QF_c = Utils_TooltipCommon::create($QF_c, $QFfield_callbacbacks[$field], false);
-					} else $QF_c = '';
+                    if (isset($display_callbacbacks[$field])) {
+                        $d_c = '<b>Yes</b>';
+                        $callback = $display_callbacbacks[$field];
+                        if(preg_match('/^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)::([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$/',$callback,$match)) {
+                            if(!is_callable(array($match[1],$match[2]))) $d_c = '<span style="color:red;font-weight:bold;">Invalid!</span>';
+                        } elseif(preg_match('/^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$/',$callback,$match)) {
+                            if(!is_callable($match[1])) $d_c = '<span style="color:red;font-weight:bold;">Invalid!</span>';
+                        } else
+                            $d_c = '<b>PHP</b>';
+                        $d_c = Utils_TooltipCommon::create($d_c, $callback, false);
+                    } else $d_c = '';
+                    if (isset($QFfield_callbacbacks[$field])) {
+                        $callback = $QFfield_callbacbacks[$field];
+                        $QF_c = '<b>Yes</b>';
+                        if(preg_match('/^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)::([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$/',$callback,$match)) {
+                            if(!is_callable(array($match[1],$match[2]))) $QF_c = '<span style="color:red;font-weight:bold;">Invalid!</span>';
+                        } elseif(preg_match('/^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$/',$callback,$match)) {
+                            if(!is_callable($match[1])) $QF_c = '<span style="color:red;font-weight:bold;">Invalid!</span>';
+                        } else
+                            $QF_c = '<b>PHP</b>';
+                        $QF_c = Utils_TooltipCommon::create($QF_c, $callback, false);
+                    } else $QF_c = '';
                     $gb_row->add_data(
                         $field,
                         $args['name'],
@@ -2043,7 +2073,9 @@ class Utils_RecordBrowser extends Module {
             'float'=>__('Float'),
             'text'=>__('Text'),
             'long text'=>__('Long text'),
-			'select'=>__('Select field')
+            'select'=>__('Select field'),
+            'calculated'=>__('Calculated')
+	
         );
         natcasesort($data_type);
 		
@@ -2175,8 +2207,11 @@ class Utils_RecordBrowser extends Module {
         $form->addRule('autonumber_pad_mask', __('Double underscore is not allowed'), 'callback', array('Utils_RecordBrowser', 'qf_rule_without_double_underscore'));
 
 		$form->addElement('checkbox', 'advanced', __('Edit advanced properties'), null, array('onchange'=>'RB_advanced_settings()', 'id'=>'advanced'));
-		$form->addElement('text', 'display_callback', __('Value display function'), array('maxlength'=>255, 'style'=>'width:300px', 'id'=>'display_callback'));
-		$form->addElement('text', 'QFfield_callback', __('Field generator function'), array('maxlength'=>255, 'style'=>'width:300px', 'id'=>'QFfield_callback'));
+        $icon = '<img src="' . Base_ThemeCommon::get_icon('info') . '" alt="info">';
+        $txt = '<ul><li>&lt;Class name&gt;::&ltmethod name&gt</li><li>&ltfunction name&gt</li><li>PHP:<br />- $record (array)<br />- $links_not_recommended (bool)<br />- $field (array)<br />return "value to display";</li></ul>';
+		$form->addElement('textarea', 'display_callback', __('Value display function') . Utils_TooltipCommon::create($icon, $txt, false), array('maxlength'=>255, 'style'=>'width:97%', 'id'=>'display_callback'));
+        $txt = '<ul><li>&lt;Class name&gt;::&ltmethod name&gt</li><li>&ltfunction name&gt</li><li>PHP:<br />- $form (QuickForm object)<br />- $field (string)<br />- $label (string)<br />- $mode (string)<br />- $default (mixed)<br />- $desc (array)<br />- $rb_obj (RB object)<br />- $display_callback_table (array)</li></ul>';
+		$form->addElement('textarea', 'QFfield_callback', __('Field generator function') . Utils_TooltipCommon::create($icon, $txt, false), array('maxlength'=>255, 'style'=>'width:97%', 'id'=>'QFfield_callback'));
 		
         if ($action=='edit') {
 			$form->freeze('field');
@@ -2221,6 +2256,7 @@ class Utils_RecordBrowser extends Module {
                     }
                     break;
 				case 'checkbox': 
+				case 'calculated': 
 							$data['required'] = false;
 							break;
 				case 'text': if ($action=='add') $param = $data['text_length'];

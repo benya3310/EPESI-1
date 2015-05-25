@@ -166,10 +166,6 @@ class CRM_Contacts_Activities extends Module {
 			if($ev['start'] == $maxt) {
 				$v = array_shift($events);
 				if($i>=$limit['offset'] && $v) {
-//					$employees = DB::GetAssoc('SELECT contact, contact FROM crm_calendar_event_group_emp AS ccegp WHERE ccegp.id=%d', array($v['id']));
-//					$customers = DB::GetAssoc('SELECT contact, contact FROM crm_calendar_event_group_cus AS ccegc WHERE ccegc.id=%d', array($v['id']));
-					$event = CRM_MeetingCommon::crm_event_get($v['id']);
-
 					if (isset($v['view_action'])) $view_href = $v['view_action'];
 					else $view_href = $this->create_callback_href(array($this, 'view_event'), array($v['id']));
 					$title = '<a '.$view_href.'>'.$v['title'].'</a>';
@@ -178,13 +174,14 @@ class CRM_Contacts_Activities extends Module {
 					$gb_row->add_data(	__('Meeting'),
 								$title, 
 								Base_RegionalSettingsCommon::time2reg($v['start'],$v['duration']==-1?false:2), 
-								CRM_ContactsCommon::display_contact(array('employees'=>$event['employees']), false, array('id'=>'employees', 'param'=>';CRM_ContactsCommon::contact_format_no_company')), 
-								CRM_ContactsCommon::display_company_contact(array('customers'=>$event['customers']), false, array('id'=>'customers', 'param'=>';::')), 
+								CRM_ContactsCommon::display_contact(array('employees'=>$v['employees']), false, array('id'=>'employees', 'param'=>';CRM_ContactsCommon::contact_format_no_company')),
+								CRM_ContactsCommon::display_company_contact(array('customers'=>$v['customers']), false, array('id'=>'customers', 'param'=>';::')),
 								Utils_AttachmentCommon::count('crm_meeting/'.$v['id'])
 							);
 				}
 			} elseif($t['deadline'] == $maxt) {
 				$v = array_shift($tasks);
+                $v = Utils_RecordBrowserCommon::filter_record_by_access('task', $v);
 				if($i>=$limit['offset'] && $v) {
 					$gb_row->add_info(Utils_RecordBrowserCommon::get_html_record_info('task', $v['id']));
 					$gb_row->add_data(	__('Task'), 
@@ -197,7 +194,8 @@ class CRM_Contacts_Activities extends Module {
 				}
 			} else {
 				$v = array_shift($phonecalls);
-				if($i>=$limit['offset'] && $v) {
+                $v = Utils_RecordBrowserCommon::filter_record_by_access('phonecall', $v);
+                if($i>=$limit['offset'] && $v) {
 					$gb_row->add_info(Utils_RecordBrowserCommon::get_html_record_info('phonecall', $v['id']));
 					$gb_row->add_data(	__('Phonecall'), 
 								CRM_PhoneCallCommon::display_subject($v), 

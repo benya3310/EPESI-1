@@ -2,8 +2,8 @@
 class epesi_archive extends rcube_plugin
 {
   public $task = 'mail';
-  public $archive_mbox = 'Epesi Archive';
-  public $archive_sent_mbox = 'Epesi Archive Sent';
+  public $archive_mbox = 'CRM Archive';
+  public $archive_sent_mbox = 'CRM Archive Sent';
 
   function init()
   {
@@ -146,6 +146,11 @@ class epesi_archive extends rcube_plugin
         }
         $rcmail->output->command('display_message',$this->gettext('archived'), 'confirmation');
     }
+    global $E_SESSION_ID,$E_SESSION;
+    $tmp = $_SESSION;
+    $_SESSION = $E_SESSION;
+    DBSession::write($E_SESSION_ID,'');
+    $_SESSION = $tmp;
   }
 
   private function archive($uids,$verbose=true) {
@@ -272,29 +277,32 @@ class epesi_archive extends rcube_plugin
     }
 
     //$rcmail->output->command('delete_messages');
-    global $E_SESSION_ID;
     $E_SESSION['rc_mails_cp'] = $epesi_mails;
-    $tmp = $_SESSION;
-    $_SESSION = $E_SESSION;
-    DBSession::write($E_SESSION_ID,'');
-    $_SESSION = $tmp;
-    define('SESSION_EXPIRED',true);
     
     chdir($path);
     return true;
   }
 
   function add_mailbox($p) {
-    if($p['root']=='') {
+    if($p['root']=='' && $p['name']=='*') {
         $rcmail = rcmail::get_instance();
-        if(!$rcmail->storage->mailbox_exists($this->archive_mbox))
-            $rcmail->storage->create_mailbox($this->archive_mbox,true);
-        elseif(!$rcmail->storage->mailbox_exists($this->archive_mbox,true))
+
+        if(!$rcmail->storage->mailbox_exists($this->archive_mbox)) {
+            $old = str_replace('CRM','Epesi',$this->archive_mbox);
+            if($rcmail->storage->mailbox_exists($old)) {
+                $rcmail->storage->rename_folder($old,$this->archive_mbox);
+            } else
+                $rcmail->storage->create_mailbox($this->archive_mbox,true);
+        } elseif(!$rcmail->storage->mailbox_exists($this->archive_mbox,true))
             $rcmail->storage->subscribe($this->archive_mbox);
 
-        if(!$rcmail->storage->mailbox_exists($this->archive_sent_mbox))
-            $rcmail->storage->create_mailbox($this->archive_sent_mbox,true);
-        elseif(!$rcmail->storage->mailbox_exists($this->archive_sent_mbox,true))
+        if(!$rcmail->storage->mailbox_exists($this->archive_sent_mbox)) {
+            $old = str_replace('CRM','Epesi',$this->archive_sent_mbox);
+            if($rcmail->storage->mailbox_exists($old)) {
+                $rcmail->storage->rename_folder($old,$this->archive_sent_mbox);
+            } else
+                $rcmail->storage->create_mailbox($this->archive_sent_mbox,true);
+        } elseif(!$rcmail->storage->mailbox_exists($this->archive_sent_mbox,true))
             $rcmail->storage->subscribe($this->archive_sent_mbox);
     }
   }
@@ -335,7 +343,7 @@ class epesi_archive extends rcube_plugin
   function list_messages($p) {
     $IMAP = $imap = rcmail::get_instance()->storage;
     $mbox = $IMAP->get_mailbox_name();
-    if(preg_match('/Epesi Archive Sent$/i',$mbox)) {
+    if(preg_match('/CRM Archive Sent$/i',$mbox)) {
         foreach($p['cols'] as &$c) {
             if($c=='from') $c = 'to';
         }

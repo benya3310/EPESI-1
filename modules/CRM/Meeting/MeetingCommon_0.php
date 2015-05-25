@@ -42,7 +42,7 @@ class CRM_MeetingCommon extends ModuleCommon {
 		$x = ModuleManager::get_instance('/Base_Box|0');
 		if(!$x) trigger_error('There is no base box module instance',E_USER_ERROR);
 		$me = CRM_ContactsCommon::get_my_record();
-		$defaults = array('employees'=>$me['id'], 'priority'=>1, 'permission'=>0, 'status'=>0);
+		$defaults = array('employees'=>$me['id'], 'priority'=>CRM_CommonCommon::get_default_priority(), 'permission'=>0, 'status'=>0);
 		$defaults['date'] = date('Y-m-d', $timestamp);
 		$defaults['time'] = date('H:i:s', $timestamp);
 		if($object) $defaults['employees'] = $object;
@@ -331,8 +331,13 @@ class CRM_MeetingCommon extends ModuleCommon {
 		return $ret;
 	}
     public static function display_date($record) {
-        $time = strtotime($record['time']);
-        return Base_RegionalSettingsCommon::time2reg($record['date'] . ' ' . date('H:i:s', $time), false);
+        $date = $record['date'];
+        $convert_tz = false;
+        if (isset($record['time']) && $record['time']) {
+            $date .= ' ' . date('H:i:s', strtotime($record['time']));
+            $convert_tz = true;
+        }
+        return Base_RegionalSettingsCommon::time2reg($date, false, true, $convert_tz);
     }
 	public static function get_status_change_leightbox_href($record, $nolink, $desc) {
 	    if($nolink) return false;
@@ -612,6 +617,10 @@ class CRM_MeetingCommon extends ModuleCommon {
 			$r = $id;
 			$id = $r['id'];
 		}
+        $r = Utils_RecordBrowserCommon::filter_record_by_access('crm_meeting', $r);
+        if ($r === false) {
+            return null;
+        }
 
 		$next = array('type'=>__('Meeting'));
 
@@ -838,7 +847,7 @@ class CRM_MeetingCommon extends ModuleCommon {
             $key = array_search($default, $rss);
             if ($key !== false) 
                 unset($rss[$key]);
-            $tabs = DB::GetAssoc('SELECT tab, caption FROM recordbrowser_table_properties WHERE tab not in (\'' . implode('\',\'', $rss) . '\') AND tab not like "%_related"');
+            $tabs = DB::GetAssoc('SELECT tab, caption FROM recordbrowser_table_properties WHERE tab not in (\'' . implode('\',\'', $rss) . '\') AND tab not like %s', array('%_related'));
             foreach ($tabs as $k => $v) {
                 $tabs[$k] = _V($v) . " ($k)";
             }
@@ -914,7 +923,7 @@ class CRM_MeetingCommon extends ModuleCommon {
 	
 	public static function mobile_meetings() {
 		$me = CRM_ContactsCommon::get_my_record();
-		$defaults = array('employees'=>array($me['id']),'status'=>0, 'permission'=>0, 'priority'=>1);
+		$defaults = array('employees'=>array($me['id']),'status'=>0, 'permission'=>0, 'priority'=>CRM_CommonCommon::get_default_priority());
 		Utils_RecordBrowserCommon::mobile_rb('crm_meeting',array('employees'=>array($me['id'])),array('date'=>'ASC', 'time'=>'ASC', 'priority'=>'DESC', 'title'=>'ASC'),array('date'=>1,'time'=>1,'priority'=>1,'longterm'=>1),$defaults);
 	}
 }

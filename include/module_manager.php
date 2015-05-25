@@ -37,7 +37,7 @@ class ModuleManager {
 		if(isset(self::$modules_install[$module_class_name])) return true;
 		$path = self::get_module_dir_path($module_class_name);
 		$file = self::get_module_file_name($module_class_name);
-		$full_path = 'modules/' . $path . '/' . $file . 'Install.php';
+		$full_path = EPESI_LOCAL_DIR . '/modules/' . $path . '/' . $file . 'Install.php';
 		if (!file_exists($full_path)) {
 			self::check_is_module_available($module_class_name);
 			return false;
@@ -67,7 +67,7 @@ class ModuleManager {
         $path = str_replace('_', '/',$class_name);
         $pos = strrpos($class_name, '_');
 		$file = ($pos !== false) ? substr($class_name, $pos+1):$class_name;
-		$file_url = 'modules/' . $path . '/' . $file . 'Common_'.$version.'.php';
+		$file_url = EPESI_LOCAL_DIR . '/modules/' . $path . '/' . $file . 'Common_'.$version.'.php';
         //
 		if(file_exists($file_url)) {
 			ob_start();
@@ -102,7 +102,7 @@ class ModuleManager {
 		$path = str_replace('_', '/',$class_name);
         $pos = strrpos($class_name, '_');
 		$file = ($pos !== false) ? substr($class_name, $pos+1):$class_name;
-		$file_url = 'modules/' . $path . '/' . $file . '_'.$version.'.php';
+		$file_url = EPESI_LOCAL_DIR . '/modules/' . $path . '/' . $file . '_'.$version.'.php';
         //
 		if (file_exists($file_url) ) {
 			ob_start();
@@ -725,7 +725,7 @@ class ModuleManager {
 	public static final function & get_instance($path) {
 		$xx = explode('/',$path);
 		$curr = & self::$root;
-		if($curr->get_node_id() != $xx[1]) {
+		if(is_object($curr) && $curr->get_node_id() != $xx[1]) {
 			$x = null;
 			return $x;
 		}
@@ -879,7 +879,9 @@ class ModuleManager {
 	}
 	
 	public static final function create_common_cache() {
-		$installed_modules = ModuleManager::get_load_priority_array(true);
+        if(!FORCE_CACHE_COMMON_FILES) return;
+
+        $installed_modules = ModuleManager::get_load_priority_array(true);
 		$ret = '';
 		foreach($installed_modules as $row) {
 			$module = $row['name'];
@@ -1029,6 +1031,7 @@ class ModuleManager {
 
 	public static function check_is_module_available($module)
 	{
+        return; // temporary disable this feature, because of issues
 		if (!self::module_dir_exists($module)) {
 			self::set_module_state($module, self::MODULE_NOT_FOUND);
 			self::unregister($module, self::$modules);
@@ -1041,6 +1044,12 @@ class ModuleManager {
 	}
 
 	public static function set_module_state($module, $state) {
+        static $column_present;
+        if ($column_present === null) {
+            $column_names = DB::MetaColumnNames('modules');
+            $column_present = isset($column_names['STATE']);
+        }
+        if (!$column_present) return;
 		DB::Execute('UPDATE modules SET state=%d WHERE name=%s', array($state, $module));
 		Cache::clear();
 	}

@@ -16,6 +16,7 @@ class ThemeUp extends SteppedAdminModule {
 
     public function action() {
         set_time_limit(0);
+        Cache::clear();
         ModuleManager::create_common_cache();
         Base_ThemeCommon::themeup();
         return true;

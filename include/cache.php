@@ -54,6 +54,12 @@ class FileCache
 
     public function clear($name = null)
     {
+        if(function_exists('xcache_clear_cache') && function_exists('xcache_count')) {
+            $count = xcache_count(XC_TYPE_PHP);
+            for($cache_id=0; $cache_id<$count; $cache_id++)
+                xcache_clear_cache(XC_TYPE_PHP,$cache_id);
+        }
+
         if ($name === null) {
             $this->data = array();
         } else {

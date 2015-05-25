@@ -400,7 +400,7 @@ class CRM_PhoneCallCommon extends ModuleCommon {
 
 	public static function mobile_phone_calls() {
 		$me = CRM_ContactsCommon::get_my_record();
-		$defaults = array('date_and_time'=>date('Y-m-d H:i:s'), 'employees'=>array($me['id']), 'permission'=>'0', 'status'=>'0', 'priority'=>'1');
+		$defaults = array('date_and_time'=>date('Y-m-d H:i:s'), 'employees'=>array($me['id']), 'permission'=>'0', 'status'=>'0', 'priority'=>CRM_CommonCommon::get_default_priority());
 		Utils_RecordBrowserCommon::mobile_rb('phonecall',array('employees'=>array($me['id'])),array('status'=>'ASC', 'date_and_time'=>'ASC', 'subject'=>'ASC'),array(),$defaults);
 	}
 
@@ -494,6 +494,10 @@ class CRM_PhoneCallCommon extends ModuleCommon {
 			$r = $id;
 			$id = $r['id'];
 		}
+        $r = Utils_RecordBrowserCommon::filter_record_by_access('phonecall', $r);
+        if (!$r) {
+            return null;
+        }
 
 		$next = array('type'=>__('Phonecall'));
 		
@@ -584,7 +588,7 @@ class CRM_PhoneCallCommon extends ModuleCommon {
             $key = array_search($default, $rss);
             if ($key !== false) 
                 unset($rss[$key]);
-            $tabs = DB::GetAssoc('SELECT tab, caption FROM recordbrowser_table_properties WHERE tab not in (\'' . implode('\',\'', $rss) . '\') AND tab not like "%_related"');
+            $tabs = DB::GetAssoc('SELECT tab, caption FROM recordbrowser_table_properties WHERE tab not in (\'' . implode('\',\'', $rss) . '\') AND tab NOT LIKE %s', array('%_related'));
             foreach ($tabs as $k => $v) {
                 $tabs[$k] = _V($v) . " ($k)";
             }

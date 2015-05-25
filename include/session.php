@@ -15,6 +15,7 @@ class DBSession {
     const MAX_SESSION_ID_LENGTH = 128;
     private static $lifetime;
     private static $memcached;
+    private static $memcached_lock_time;
     private static $session_fp;
     private static $session_client_fp;
     private static $session_type;
@@ -48,6 +49,11 @@ class DBSession {
             default:
                 self::$session_type = 'file';
         }
+        if(self::$session_type=='memcache') {
+            self::$memcached_lock_time = ini_get("max_execution_time");
+            if(!self::$memcached_lock_time) self::$memcached_lock_time = 60;
+            self::$memcached_lock_time += time();
+        }
         return true;
     }
 
@@ -71,7 +77,7 @@ class DBSession {
                 $ret = stream_get_contents(self::$session_fp);
                 break;
             case 'memcache':
-                if(!READ_ONLY_SESSION && !self::$memcached->lock(MEMCACHE_SESSION_TOKEN.$name,time()+self::$lifetime))
+                if(!READ_ONLY_SESSION && !self::$memcached->lock(MEMCACHE_SESSION_TOKEN.$name,self::$memcached_lock_time))
                     trigger_error('Unable to get lock on session mem='.$name,E_USER_ERROR);
                 $ret = '';
                 for($i=0;; $i++) {
@@ -91,6 +97,8 @@ class DBSession {
             if(!is_numeric(CID))
                 trigger_error('Invalid client id.',E_USER_ERROR);
 
+            if(isset($_SESSION['session_destroyed'][CID])) return '';
+            
             switch(self::$session_type) {
                 case 'file':
                     $sess_file = rtrim(FILE_SESSION_DIR,'\\/').'/'.FILE_SESSION_TOKEN.$name.'_'.CID;
@@ -101,7 +109,7 @@ class DBSession {
                     $ret = stream_get_contents(self::$session_client_fp);
                     break;
                 case 'memcache':
-                    if(!READ_ONLY_SESSION && !self::$memcached->lock(MEMCACHE_SESSION_TOKEN.$name.'_'.CID,time()+self::$lifetime))
+                    if(!READ_ONLY_SESSION && !self::$memcached->lock(MEMCACHE_SESSION_TOKEN.$name.'_'.CID,self::$memcached_lock_time))
                         trigger_error('Unable to get lock on session mem='.$name.'_'.CID,E_USER_ERROR);
                     $ret = '';
                     for($i=0;; $i++) {
@@ -127,7 +135,7 @@ class DBSession {
         if(READ_ONLY_SESSION || defined('SESSION_EXPIRED')) return true;
         $name = self::truncated_session_id($name);
         $ret = 1;
-        if(CID!==false && isset($_SESSION['client'])) {
+        if(CID!==false && isset($_SESSION['client']) && !isset($_SESSION['session_destroyed'][CID])) {
             $data = serialize($_SESSION['client']);
             
             switch(self::$session_type) {
@@ -140,12 +148,14 @@ class DBSession {
                     fclose(self::$session_client_fp);
                     break;
                 case 'memcache':
-                    $data = str_split($data,1000000); //something little less then 1MB
-                    $data[] = '';
-                    foreach($data as $i=>$d) {
-                        self::$memcached->set(MEMCACHE_SESSION_TOKEN.$name.'_'.CID.'/'.$i, $d, self::$lifetime);
+                    if(self::$memcached->is_lock(MEMCACHE_SESSION_TOKEN.$name.'_'.CID,self::$memcached_lock_time)) {
+                        $data = str_split($data,1000000); //something little less then 1MB
+                        $data[] = '';
+                        foreach($data as $i=>$d) {
+                            self::$memcached->set(MEMCACHE_SESSION_TOKEN.$name.'_'.CID.'/'.$i, $d, self::$lifetime);
+                        }
+                        self::$memcached->unlock(MEMCACHE_SESSION_TOKEN.$name.'_'.CID);
                     }
-                    self::$memcached->unlock(MEMCACHE_SESSION_TOKEN.$name.'_'.CID);
                     break;
                 case 'sql':
                     if(DB::is_mysql())
@@ -169,13 +179,15 @@ class DBSession {
                 $ret &= DB::Replace('session',array('expires'=>time(),'name'=>DB::qstr($name)),'name');
                 break;
             case 'memcache':
-                $data = str_split($data,1000000); //something little less then 1MB
-                $data[] = '';
-                foreach($data as $i=>$d) {
-                    self::$memcached->set(MEMCACHE_SESSION_TOKEN.$name.'/'.$i, $d, self::$lifetime);
+                if(self::$memcached->is_lock(MEMCACHE_SESSION_TOKEN.$name,self::$memcached_lock_time)) {
+                    $data = str_split($data,1000000); //something little less then 1MB
+                    $data[] = '';
+                    foreach($data as $i=>$d) {
+                        self::$memcached->set(MEMCACHE_SESSION_TOKEN.$name.'/'.$i, $d, self::$lifetime);
+                    }
+                    self::$memcached->unlock(MEMCACHE_SESSION_TOKEN.$name);
+                    $ret &= DB::Replace('session',array('expires'=>time(),'name'=>DB::qstr($name)),'name');
                 }
-                self::$memcached->unlock(MEMCACHE_SESSION_TOKEN.$name);
-                $ret &= DB::Replace('session',array('expires'=>time(),'name'=>DB::qstr($name)),'name');
                 break;
             case 'sql':
                 if(DB::is_mysql())
@@ -209,7 +221,8 @@ class DBSession {
 
     public static function destroy($name) {
         $name = self::truncated_session_id($name);
-        for($i=0; $i<5; $i++)
+        $cids = DB::GetCol('SELECT DISTINCT client_id FROM history WHERE session_name=%s',array($name));
+        foreach($cids as $i)
             self::destroy_client($name,$i);
         
         switch(self::$session_type) {
@@ -272,11 +285,16 @@ class EpesiMemcache {
         if($this->mcd) return $this->memcached->set($key,$var,$exp);
         return $this->memcached->set($key,$var,null,$exp);
     }
+
+    public function is_lock($key,$exp=null) {
+        $key .= '#lock';
+        $v = $this->memcached->get($key);
+        return $v==$exp || ($exp===null && $v);
+    }
     
     public function lock($key,$exp) {
-        $v = microtime(true);
         $key .= '#lock';
-        while(!$this->add($key,$v,$exp) || $this->memcached->get($key)!=$v) {
+        while(!$this->add($key,$exp,$exp) || $this->memcached->get($key)!=$exp) {
             if(time()>$exp) return false;
             usleep(100);
         }

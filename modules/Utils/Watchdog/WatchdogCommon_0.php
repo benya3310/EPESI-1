@@ -41,6 +41,19 @@ class Utils_WatchdogCommon extends ModuleCommon {
 		}
 		return $ret;
 	}
+
+    public static function cron()
+    {
+        return array('cron_send_notifications' => 1);
+    }
+
+    public static function cron_send_notifications()
+    {
+        while(false != ($event_id = self::pop_queued_notification_for_cron())) {
+            self::send_email_notifications($event_id);
+        }
+    }
+
 	public static function get_subscribers($category_name, $id=null) {
 		$category_id = self::get_category_id($category_name);
 		if ($id!==null) $ret = DB::GetAssoc('SELECT user_id,user_id FROM utils_watchdog_subscription WHERE category_id=%d AND internal_id=%s', array($category_id, $id));
@@ -93,29 +106,50 @@ class Utils_WatchdogCommon extends ModuleCommon {
 	public static function dont_notify($d=true) {
 		self::$disabled=$d;
 	}
-	
+
+    public static function email_mode($set = null)
+    {
+        static $email_mode = false;
+        if ($set !== null) {
+            $email_mode = ($set == true);
+        }
+        return $email_mode;
+    }
 	public static function new_event($category_name, $id, $message) {
 		if(self::$disabled) return;
 		$category_id = self::get_category_id($category_name, false);
 		if (!$category_id) return;
 		DB::Execute('INSERT INTO utils_watchdog_event (category_id, internal_id, message, event_time) VALUES (%d,%d,%s,%T)',array($category_id,$id,$message,time()));
 		$event_id = DB::Insert_ID('utils_watchdog_event', 'id');
-		Utils_WatchdogCommon::notified($category_name,$id);
 		$count = DB::GetOne('SELECT COUNT(*) FROM utils_watchdog_event WHERE category_id=%d AND internal_id=%d', array($category_id,$id));
 		if ($count==1) {
 			$subscribers = self::get_subscribers($category_id);
 			foreach ($subscribers as $s)
 				self::user_subscribe($s, $category_name, $id);
 		}
-        $subscribers = self::get_subscribers($category_name, $id);
+        Utils_WatchdogCommon::notified($category_name,$id);
 
-		$c_user = Acl::get_user();
-		foreach ($subscribers as $user_id) {
-            if ($user_id==$c_user) continue;
+        self::queue_notification_for_cron($event_id);
+    }
+
+    public static function send_email_notifications($event_id)
+    {
+        $event = DB::GetRow('SELECT * FROM utils_watchdog_event WHERE id=%d', array($event_id));
+        if (!$event) return;
+
+        $category_id = $event['category_id'];
+        $id = $event['internal_id'];
+        $message = $event['message'];
+        $subscribers = self::get_subscribers($category_id, $id);
+
+        $c_user = Acl::get_user();
+        self::email_mode(true);
+        foreach ($subscribers as $user_id) {
             $wants_email = Base_User_SettingsCommon::get('Utils_Watchdog', 'email', $user_id);
             if (!$wants_email) continue;
             Acl::set_user($user_id);
-            $email_data = self::display_events($category_id, array($event_id => $message), $id);
+            Base_LangCommon::load();
+            $email_data = self::display_events($category_id, array($event_id => $message), $id, true);
             if (!$email_data) continue;
             $contact = Utils_RecordBrowserCommon::get_id('contact', 'login', $user_id);
             if (!$contact) continue;
@@ -124,8 +158,24 @@ class Utils_WatchdogCommon extends ModuleCommon {
             $title = __('%s notification - %s - %s', array(EPESI, $email_data['category'], strip_tags($email_data['title'])));
             Base_MailCommon::send($email, $title, $email_data['events'], null, null, true);
         }
-		Acl::set_user($c_user);
-	}
+        Acl::set_user($c_user);
+        Base_LangCommon::load();
+        self::email_mode(false);
+    }
+
+    public static function queue_notification_for_cron($event_id)
+    {
+        DB::Execute('INSERT INTO utils_watchdog_notification_queue VALUES (%d)', array($event_id));
+    }
+
+    public static function pop_queued_notification_for_cron()
+    {
+        DB::StartTrans();
+        $event_id = DB::GetOne('SELECT event_id FROM utils_watchdog_notification_queue');
+        DB::Execute('DELETE FROM utils_watchdog_notification_queue WHERE event_id=%d', array($event_id));
+        DB::CompleteTrans();
+        return $event_id;
+    }
 	// *************************** Subscription manipulation *******************
 	public static function user_purge_notifications($user_id, $category_name, $time=null) {
 		$category_id = self::get_category_id($category_name);
@@ -140,7 +190,8 @@ class Utils_WatchdogCommon extends ModuleCommon {
 		$last_event = DB::GetOne('SELECT MAX(id) FROM utils_watchdog_event WHERE internal_id=%d AND category_id=%d', array($id,$category_id));
 		if ($last_event===null || $last_event===false) $last_event = -1;
 		DB::Execute('UPDATE utils_watchdog_subscription SET last_seen_event=%d WHERE user_id=%d AND internal_id=%d AND category_id=%d',array($last_event,$user_id,$id,$category_id));
-		DB::Execute('DELETE FROM utils_watchdog_event WHERE internal_id=%d AND category_id=%d AND (id<(SELECT MIN(last_seen_event) FROM utils_watchdog_subscription WHERE internal_id=%d AND category_id=%d) OR event_time<=%T)', array($id,$category_id,$id,$category_id, date('Y-m-d H:i:s', strtotime('-3 month'))));
+		$min_last_seen = DB::GetOne('SELECT MIN(last_seen_event) FROM utils_watchdog_subscription WHERE internal_id=%d AND category_id=%d',array($id,$category_id));
+		DB::Execute('DELETE FROM utils_watchdog_event WHERE internal_id=%d AND category_id=%d AND (id<%d OR event_time<=%T)', array($id,$category_id,$min_last_seen, date('Y-m-d H:i:s', strtotime('-3 month'))));
 	}
 
 	public static function user_subscribe($user_id, $category_name, $id) {
@@ -257,12 +308,12 @@ class Utils_WatchdogCommon extends ModuleCommon {
 		}
 		Base_ActionBarCommon::add($icon,$label,$href);
 	}
-	public static function display_events($category_name, $changes, $id) {
+	public static function display_events($category_name, $changes, $id, $for_email = false) {
 		if (!is_array($changes)) return '';
 		$category_id = self::get_category_id($category_name);
 		$method = DB::GetOne('SELECT callback FROM utils_watchdog_category WHERE id=%d', array($category_id));
 		$method = explode('::', $method);
-		$data = call_user_func($method, $id, $changes);
+		$data = call_user_func($method, $id, $changes, true, $for_email);
 		if (!isset($data['events'])) return '';
 		return $data;
 	}
