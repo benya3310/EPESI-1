@@ -21,8 +21,33 @@ define('SMARTY_DIR', 'modules/Base/Theme/smarty/');
 require_once(SMARTY_DIR.'Smarty.class.php');
 
 
-class Base_ThemeCommon extends ModuleCommon {
-	public static function init_smarty() {
+class Base_ThemeCommon extends ModuleCommon
+{
+
+    public static $twig_loader;
+    /** @var  Twig_Environment */
+    public static $twig_env;
+
+    public static function init_smarty() {
+        self::init_twig_loader();
+        $obj = new Base_Theme_TemplateStub();
+        return $obj;
+    }
+
+    public static function init_twig_loader()
+    {
+        if (self::$twig_loader === null) {
+            Twig_Autoloader::register();
+
+            self::$twig_loader = new Twig_Loader_Filesystem('');
+            self::$twig_env = new Twig_Environment(self::$twig_loader, array(
+                'cache'       => DATA_DIR . '/cache/twig/',
+                'auto_reload' => true,
+            ));
+        }
+    }
+
+	public static function init_smarty_real() {
 		$smarty = new Smarty();
 		
 		$theme = self::get_default_template();
@@ -46,27 +71,61 @@ class Base_ThemeCommon extends ModuleCommon {
 		}
 		return $theme;
 	}
+
+    public static function get_template_for_module($module_name)
+    {
+        return 'theme';
+    }
 	
 	public static function display_smarty($smarty, $module_name, $user_template=null, $fullname=false) {
-		$module_name = str_replace('_','/',$module_name);
-		if(isset($user_template)) {
-			if (!$fullname)
-				$module_name .= '/'.$user_template;
-			else {
-				if(preg_match("/.tpl$/i",$user_template)) {
-					$tpl = $user_template;
-					$css = str_replace('.tpl','.css',$tpl);
-				} else
-					$module_name = $user_template;
-			}
-		} else
-			$module_name .= '/default';
-		
+        $module_class = str_replace('/', '_', $module_name);
+        $module_name = str_replace('_', '/', $module_name);
+        $is_twig = false;
+        if (isset($user_template)) {
+            if ($fullname) {
+                if (preg_match("/.tpl$/i", $user_template)) {
+                    $tpl = $user_template;
+                    $css = str_replace('.tpl', '.css', $tpl);
+                } elseif (preg_match("/.twig$/i", $user_template)) {
+                    $tpl = $user_template;
+                    $css = str_replace('.twig', '.css', $tpl);
+                    $is_twig = true;
+                } else {
+                    $module_name = $user_template;
+                    $user_template = '';
+                }
+            }
+        } else {
+            $user_template = 'default';
+        }
+
+        $selected_module_template = self::get_template_for_module($module_name);
+        if ($is_twig === false) {
+            $twig_template_file = "modules/$module_name/$selected_module_template/$user_template.twig";
+            if (file_exists($twig_template_file)) {
+                self::$twig_loader->addPath("modules/$module_name/$selected_module_template/", $module_class);
+                $is_twig = true;
+            }
+        }
+        if ($is_twig) {
+            if (!isset($tpl)) {
+                $tpl = "@$module_class/$user_template.twig";
+                $css = "modules/$module_name/$selected_module_template/$user_template.css";
+                load_css($css, '');
+            }
+            self::$twig_env->display($tpl, $smarty->__get_vars());
+            return;
+        }
+
 		if(!isset($tpl)) {
-			$tpl = $module_name.'.tpl';
-			$css = $module_name.'.css';
+			$tpl = "$module_name/$user_template.tpl";
+			$css = "$module_name/$user_template.css";
 		}
-		
+        if ($smarty instanceof Base_Theme_TemplateStub) {
+            $stub = $smarty;
+            $smarty = self::init_smarty_real();
+            $stub->__assign_vars($smarty);
+        }
 
 		if($smarty->template_exists($tpl)) {
 			$smarty->assign('theme_dir',$smarty->template_dir);
