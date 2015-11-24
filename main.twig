@@ -18,14 +18,7 @@
         <script type='text/javascript' src='{{ jsses_src | raw }}'></script>
     {% endif %}
 
-
-    {% if csses_src is iterable %}
-        {% for css in csses_src %}
-            <link type="text/css" href="{{ css | raw }}" rel="stylesheet">
-        {% endfor %}
-    {% else %}
-        <link type="text/css" href="{{ csses_src | raw }}" rel="stylesheet">
-    {% endif %}
+    <link href="libs/jquery-ui-1.10.1.custom.min.css" rel="stylesheet" />
 
 
     <style type="text/css">

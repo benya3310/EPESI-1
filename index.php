@@ -58,6 +58,8 @@ $tables = DB::MetaTables();
 if (!in_array('modules', $tables) || !in_array('variables', $tables) || !in_array('session', $tables))
     die('Database structure you are using is apparently out of date or damaged. If you didn\'t perform application update recently you should try to restore the database. Otherwise, please refer to EPESI documentation in order to perform database update.');
 
+require_once('include/misc.php');
+
 
 $options = array();
 $options['epesi'] = EPESI;
@@ -77,20 +79,9 @@ if (!DEBUG_JS) {
     $options['jsses_src'] = $jses;
 }
 
-$csses = array('libs/jquery-ui-1.10.1.custom.min.css');
-if (!DEBUG_CSS) {
-    $csses_build = new Minify_Build($csses);
-    $options['csses_src'] = $csses_build->uri('serve.php?' . http_build_query(array('f' => array_values($csses))));
-} else {
-    $options['csses_src'] = $csses;
-}
-
-
-
 $options['rtl'] = DIRECTION_RTL;
 $options['tracking_code'] = TRACKING_CODE;
 $options['starting_message'] = STARTING_MESSAGE;
-
 
 
 /*
