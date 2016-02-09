@@ -16,8 +16,11 @@ $response->mustRevalidate();
 $response->setExpires(new DateTime());
 $response->headers->set('Content-type', 'text/javascript');
 
-if(!isset($_POST['url']) || !isset($_SERVER['HTTP_X_CLIENT_ID']))
-	die('alert(\'Invalid request\');');
+if(!isset($_POST['url']) || !isset($_SERVER['HTTP_X_CLIENT_ID'])) {
+	$response->sendContent('alert(\'Invalid request\');');
+	$response->send();
+	die();
+}
 
 
 define('JS_OUTPUT',1);
