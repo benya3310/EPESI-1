@@ -72,8 +72,18 @@ class Epesi {
 		return $jjj;
 	}
 
-	public final static function get_content() {
+	public final static function get_txts() {
 		return self::$txts;
+	}
+
+	public final static function get_content()
+	{
+		return self::$content;
+	}
+
+	public final static function get_debug()
+	{
+		return self::$debug;
 	}
 
 	public final static function get_output() {
@@ -86,7 +96,7 @@ class Epesi {
 		foreach($out_js as $js) {
 			$ret .= 'Epesi.load_js(\''.self::escapeJS($js,false).'\');';
 		}
-		$ret .= self::$txts;
+		$ret .= self::get_txts();
 		$jjj = self::get_eval_jses();
 		if($jjj!=='')
 			$ret .= 'Epesi.append_js(\''.self::escapeJS($jjj,false).'\');';

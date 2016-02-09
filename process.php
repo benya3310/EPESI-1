@@ -39,8 +39,8 @@ if(!isset($_SESSION['num_of_clients'])) {
 	DBSession::destroy_client(session_id(),CID);
 } else {
 	Epesi::process($_POST['url'],isset($_POST['history'])?$_POST['history']:false);
-	Epesi::text(Epesi::$content, 'main_content');
-	Epesi::text(Epesi::$debug,'debug');
+	Epesi::text(Epesi::get_content(), 'main_content');
+	Epesi::text(Epesi::get_debug(),'debug');
 	Epesi::send_output();
 }
 $content = ob_get_contents();
