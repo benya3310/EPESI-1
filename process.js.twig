@@ -1,0 +1,14 @@
+{% for css in load_css %}
+    Epesi.load_css('{{ css | raw }}');
+{% endfor %}
+
+
+{% for js in load_js %}
+    Epesi.load_js('{{ js | raw }}');
+{% endfor %}
+
+debugger;
+Epesi.text('{{ content | e('js') }}','main_content','i');
+Epesi.text('{{ debug | e('js') }}','debug','i');
+
+Epesi.append_js('{{ eval_js | e('js') }}');
