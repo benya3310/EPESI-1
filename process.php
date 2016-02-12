@@ -49,7 +49,8 @@ if(!isset($_SESSION['num_of_clients'])) {
 	Epesi::process($_POST['url'],isset($_POST['history'])?$_POST['history']:false);
 }
 
-$twig = ModuleManager::get_container()['twig'];
+$container = ModuleManager::get_container();
+$twig = $container['twig'];
 
 /** @var Twig_Environment $twig */
 $content = $twig->render('process.js.twig', array(
