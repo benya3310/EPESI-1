@@ -64,21 +64,7 @@ require_once('include/misc.php');
 $options = array();
 $options['epesi'] = EPESI;
 
-ini_set('include_path', 'libs/minify' . PATH_SEPARATOR . '.' . PATH_SEPARATOR . 'libs' . PATH_SEPARATOR . ini_get('include_path'));
-
-
-require_once('Minify/Build.php');
-
-$jquery = DEBUG_JS ? 'libs/jquery-1.11.3.js' : 'libs/jquery-1.11.3.min.js';
-$jquery_migrate = DEBUG_JS ? 'libs/jquery-migrate-1.2.1.js' : 'libs/jquery-migrate-1.2.1.min.js';
-$jses = array('libs/prototype.js', $jquery, $jquery_migrate, 'libs/jquery-ui-1.10.1.custom.min.js', 'libs/HistoryKeeper.js', 'include/epesi.js');
-if (!DEBUG_JS) {
-    $jsses_build = new Minify_Build($jses);
-    $options['jsses_src'] = $jsses_build->uri('serve.php?' . http_build_query(array('f' => array_values($jses))));
-} else {
-    $options['jsses_src'] = $jses;
-}
-
+$options['debug_js'] = DEBUG_JS;
 $options['rtl'] = DIRECTION_RTL;
 $options['tracking_code'] = TRACKING_CODE;
 $options['starting_message'] = STARTING_MESSAGE;
